@@ -29,6 +29,9 @@ def parse_headers(html: str) -> list[str]:
     """
     解析 HTML，找到所有 <h2 class="accordion-header"> 節點，
     並回傳它們的純文字內容清單。
+
+    本函式僅回傳所有標題文字，不進行篩選；
+    後續印出時會用 ``txt.startswith("[")`` 再過濾。
     """
     # 1) 建立 BeautifulSoup 物件，使用內建解析器
     soup = BeautifulSoup(html, "html.parser")
@@ -62,11 +65,13 @@ if __name__ == "__main__":
     # 2) 解析 <h2 class="accordion-header"> 文字
     header_texts = parse_headers(html)
 
-    # 3) 印出結果
+    # 3) 印出結果 -- 只列出以 "[" 開頭的項目
+    #    parse_headers 已回傳所有標題，這裡再用 txt.startswith("[") 過濾
     if header_texts:
         print("抓到以下 <h2 class=\"accordion-header\"> 內的文字：")
         for idx, txt in enumerate(header_texts, 1):
-            if txt.startswith("[") :
+            # 只輸出開頭為 "[" 的標題
+            if txt.startswith("["):
                 print(f"{idx}. {txt}")
     else:
         print("找不到任何 <h2 class=\"accordion-header\"> 節點。")
