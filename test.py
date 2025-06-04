@@ -1,5 +1,6 @@
 import time
 import requests
+import sys
 from bs4 import BeautifulSoup
 
 # 模擬一般瀏覽器，降低被網站當機器人阻擋的機率
@@ -56,7 +57,7 @@ if __name__ == "__main__":
     # 1) 取得 HTML
     html = fetch_page(url)
     if html is None:
-        exit(1)
+        sys.exit(1)
 
     # 2) 解析 <h2 class="accordion-header"> 文字
     header_texts = parse_headers(html)
