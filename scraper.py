@@ -57,13 +57,19 @@ class Scraper:
         """解析 HTML 取得 button 文字與網址。"""
         soup = BeautifulSoup(html, "html.parser")
 
-        # ▸ 抓取 <div class="accordion"> 區塊
-        accordion_divs: List[Tag] = soup.select("div.accordion")
+        # ▸ 僅抓取 <div class="tab-content"> 內的 <div class="accordion"> 區塊
+        accordion_divs: List[Tag] = soup.select("div.tab-content div.accordion")
         results: List[Dict[str, str]] = []
 
         for div in accordion_divs:
-            # ▸ 於每個 .accordion 內部尋找 h2.accordion-header > button[onclick]
-            for btn in div.select("h2.accordion-header > button[onclick]"):
+            # ▸ 於每個 .accordion 內部僅限 id="side-sell-single" 區塊下
+            #   的 h2.accordion-header > button[onclick]，並排除
+            #   id="side-sell-target-11" 區塊
+            for btn in div.select(
+                "div#side-sell-single h2.accordion-header > button[onclick]"
+            ):
+                if btn.find_parent(id="side-sell-target-11"):
+                    continue
                 onclick_attr = btn.get("onclick", "")
                 # onclick="location.href='https://yuyu-tei.jp/sell/opc/s/op12'"
                 m = re.search(r"location\.href=['\"]([^'\"]+)['\"]", onclick_attr)
