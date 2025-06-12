@@ -24,7 +24,7 @@ class ScrapedData(Base):
     __tablename__ = "scraped_data"
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
-    name: str = Column(String(255), nullable=False)
+    product_name: str = Column(String(255), nullable=False)
     url: str = Column(String(1024), nullable=False)
     scraped_at: datetime = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -64,7 +64,7 @@ class DatabaseManager:
             df = pd.DataFrame([
                 {
                     "id": d.id,
-                    "name": d.name,
+                    "product_name": d.product_name,
                     "url": d.url,
                     "scraped_at": d.scraped_at,
                 }

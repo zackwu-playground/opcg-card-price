@@ -3,7 +3,7 @@
 核心爬蟲模組
 ===============================
 • 功能：下載並解析 https://yuyu-tei.jp/top/opc
-• 輸出：List[Dict[str, str]] -> [{"name": ..., "url": ...}, ...]
+• 輸出：List[Dict[str, str]] -> [{"product_name": ..., "url": ...}, ...]
 
 此模組僅專注『抓資料』，不負責資料庫或排程。
 """
@@ -78,7 +78,7 @@ class Scraper:
 
                 results.append(
                     {
-                        "name": btn.get_text(strip=True),
+                        "product_name": btn.get_text(strip=True),
                         "url": m.group(1),
                     }
                 )
