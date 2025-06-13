@@ -3,7 +3,7 @@
 核心爬蟲模組
 ===============================
 • 功能：下載並解析 https://yuyu-tei.jp/top/opc
-• 輸出：List[Product] -> [Product(name=..., url=...), ...]
+• 輸出：List[Product] -> [Product(name=..., url=..., cards=[...]), ...]
 
 此模組僅專注『抓資料』，不負責資料庫或排程。
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import List
 
-from models import Product
+from models import Product, Card
 
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -55,6 +55,84 @@ class Scraper:
         resp.raise_for_status()  # 若非 2xx 會拋出 HTTPError
         return resp.text
 
+    def fetch_page(self, url: str) -> str:
+        """下載指定產品頁面 HTML。"""
+        resp = self.session.get(url, timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.text
+
+    def parse_card_page(self, html: str) -> Card:
+        """解析單一卡片頁面以取得詳細資訊。"""
+        soup = BeautifulSoup(html, "html.parser")
+
+        name_elem = soup.find("h1") or soup.find("h2")
+        name = name_elem.get_text(strip=True) if name_elem else ""
+
+        img_elem = soup.find("img")
+        img = img_elem["src"] if img_elem and img_elem.has_attr("src") else ""
+
+        text = soup.get_text(" ", strip=True)
+
+        num_match = re.search(r"[A-Z]+\d+", text)
+        number = num_match.group(0) if num_match else ""
+
+        price_match = re.search(r"([0-9,]+)\s*円", text)
+        price = int(price_match.group(1).replace(",", "")) if price_match else 0
+
+        qty_match = re.search(r"(\d+)\s*\D*在庫", text)
+        quantity = int(qty_match.group(1)) if qty_match else 0
+
+        return Card(
+            name=name,
+            rarity="",
+            url="",
+            image=img,
+            number=number,
+            price=price,
+            quantity=quantity,
+        )
+
+    def parse_product_page(self, html: str) -> List[Card]:
+        """解析產品頁面以取得卡片清單，依稀有度排序。"""
+        soup = BeautifulSoup(html, "html.parser")
+
+        container = soup.find(class_="col-12")
+        if not container:
+            return []
+
+        cards: List[Card] = []
+        for card_list in container.select("div.py-4.card-list"):
+            rarity_elem = card_list.find(class_="py-2")
+            rarity = rarity_elem.get_text(strip=True) if rarity_elem else ""
+
+            for row in card_list.select("div.row"):
+                for col in row.select("div.col-md"):
+                    link = col.find("a", href=True)
+                    if not link:
+                        continue
+                    card_url = link["href"]
+
+                    try:
+                        card_html = self.fetch_page(card_url)
+                        card = self.parse_card_page(card_html)
+                    except requests.RequestException:
+                        card = Card(
+                            name="",
+                            rarity=rarity,
+                            url=card_url,
+                            image="",
+                            number="",
+                            price=0,
+                            quantity=0,
+                        )
+                    else:
+                        card.rarity = rarity
+                        card.url = card_url
+
+                    cards.append(card)
+
+        return cards
+
     def parse(self, html: str) -> List[Product]:
         """解析 HTML 取得 button 文字與網址並組成 ``Product`` 物件。"""
         soup = BeautifulSoup(html, "html.parser")
@@ -78,12 +156,16 @@ class Scraper:
                 if not m:
                     continue  # 跳過 parse 失敗
 
-                results.append(
-                    Product(
-                        name=btn.get_text(strip=True),
-                        url=m.group(1),
-                    )
+                product = Product(
+                    name=btn.get_text(strip=True),
+                    url=m.group(1),
                 )
+                try:
+                    product_html = self.fetch_page(product.url)
+                    product.cards = self.parse_product_page(product_html)
+                except requests.RequestException:
+                    product.cards = []
+                results.append(product)
         return results
 
 

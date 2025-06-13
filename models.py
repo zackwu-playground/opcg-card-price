@@ -14,6 +14,7 @@ class Card:
 
     name: str
     rarity: str
+    url: str
     image: str
     number: str
     price: int
