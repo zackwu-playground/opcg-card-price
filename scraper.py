@@ -3,14 +3,16 @@
 核心爬蟲模組
 ===============================
 • 功能：下載並解析 https://yuyu-tei.jp/top/opc
-• 輸出：List[Dict[str, str]] -> [{"product_name": ..., "url": ...}, ...]
+• 輸出：List[Product] -> [Product(name=..., url=...), ...]
 
 此模組僅專注『抓資料』，不負責資料庫或排程。
 """
 from __future__ import annotations
 
 import re
-from typing import List, Dict
+from typing import List
+
+from models import Product
 
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -39,7 +41,7 @@ class Scraper:
     # ---------------------------------------------------------------------
     # Public API
     # ---------------------------------------------------------------------
-    def run(self) -> List[Dict[str, str]]:
+    def run(self) -> List[Product]:
         """一次完成 *下載 ➜ 解析* 並返回結果。"""
         html = self.fetch()
         return self.parse(html)
@@ -53,13 +55,13 @@ class Scraper:
         resp.raise_for_status()  # 若非 2xx 會拋出 HTTPError
         return resp.text
 
-    def parse(self, html: str) -> List[Dict[str, str]]:
-        """解析 HTML 取得 button 文字與網址。"""
+    def parse(self, html: str) -> List[Product]:
+        """解析 HTML 取得 button 文字與網址並組成 ``Product`` 物件。"""
         soup = BeautifulSoup(html, "html.parser")
 
         # ▸ 僅抓取 <div class="tab-content"> 內的 <div class="accordion"> 區塊
         accordion_divs: List[Tag] = soup.select("div.tab-content div.accordion")
-        results: List[Dict[str, str]] = []
+        results: List[Product] = []
 
         for div in accordion_divs:
             # ▸ 於每個 .accordion 內部僅限 id="side-sell-single" 區塊下
@@ -77,10 +79,10 @@ class Scraper:
                     continue  # 跳過 parse 失敗
 
                 results.append(
-                    {
-                        "product_name": btn.get_text(strip=True),
-                        "url": m.group(1),
-                    }
+                    Product(
+                        name=btn.get_text(strip=True),
+                        url=m.group(1),
+                    )
                 )
         return results
 
@@ -90,4 +92,4 @@ if __name__ == "__main__":  # Quick manual test
 
     scraper = Scraper("https://yuyu-tei.jp/top/opc")
     data = scraper.run()
-    print(json.dumps(data, ensure_ascii=False, indent=2))
+    print(json.dumps([p.__dict__ for p in data], ensure_ascii=False, indent=2))
