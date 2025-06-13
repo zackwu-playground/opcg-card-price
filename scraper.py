@@ -62,11 +62,8 @@ class Scraper:
         return resp.text
 
     def parse_card_page(self, html: str) -> Card:
-        """解析單一卡片頁面以取得詳細資訊。"""
+        """解析單一卡片頁面以取得詳細資訊 (不含卡片名稱)。"""
         soup = BeautifulSoup(html, "html.parser")
-
-        name_elem = soup.find("h1") or soup.find("h2")
-        name = name_elem.get_text(strip=True) if name_elem else ""
 
         img_elem = soup.find("img")
         img = img_elem["src"] if img_elem and img_elem.has_attr("src") else ""
@@ -83,7 +80,7 @@ class Scraper:
         quantity = int(qty_match.group(1)) if qty_match else 0
 
         return Card(
-            name=name,
+            name="",
             rarity="",
             url="",
             image=img,
@@ -111,13 +108,15 @@ class Scraper:
                     if not link:
                         continue
                     card_url = link["href"]
+                    name_tag = col.find(class_="text-primary")
+                    card_name = name_tag.get_text(strip=True) if name_tag else ""
 
                     try:
                         card_html = self.fetch_page(card_url)
                         card = self.parse_card_page(card_html)
                     except requests.RequestException:
                         card = Card(
-                            name="",
+                            name=card_name,
                             rarity=rarity,
                             url=card_url,
                             image="",
@@ -128,6 +127,7 @@ class Scraper:
                     else:
                         card.rarity = rarity
                         card.url = card_url
+                        card.name = card_name
 
                     cards.append(card)
 
