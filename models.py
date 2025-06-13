@@ -19,6 +19,8 @@ class Card:
     number: str
     price: int
     quantity: int
+    feature: str = ""
+    color: str = ""
 
 
 @dataclass

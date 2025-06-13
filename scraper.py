@@ -120,6 +120,8 @@ class Scraper:
             number=number,
             price=price,
             quantity=quantity,
+            feature="",
+            color="",
         )
 
     def parse_product_page(self, html: str) -> List[Card]:
