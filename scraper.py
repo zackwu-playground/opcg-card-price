@@ -66,6 +66,8 @@ class Scraper:
         soup = BeautifulSoup(html, "html.parser")
 
         img_bytes = b""
+        number = ""
+        price = 0
         container = soup.find(class_="col-12")
         if container:
             img_col = container.find(class_="col-lg-5")
@@ -80,13 +82,23 @@ class Scraper:
                     except requests.RequestException:
                         img_bytes = b""
 
+            info_col = container.find(class_="col-lg-7")
+            if info_col:
+                d_flex_list = info_col.find_all(class_="d-flex")
+                if d_flex_list:
+                    border_elem = d_flex_list[0].find(class_="border")
+                    if border_elem:
+                        number = border_elem.get_text(strip=True)
+                if len(d_flex_list) >= 2:
+                    price_elem = d_flex_list[1].find("h4", class_="fw-bold")
+                    if price_elem:
+                        price_text = price_elem.get_text(strip=True)
+                        try:
+                            price = int(re.sub(r"[^0-9]", "", price_text))
+                        except ValueError:
+                            price = 0
+
         text = soup.get_text(" ", strip=True)
-
-        num_match = re.search(r"[A-Z]+\d+", text)
-        number = num_match.group(0) if num_match else ""
-
-        price_match = re.search(r"([0-9,]+)\s*円", text)
-        price = int(price_match.group(1).replace(",", "")) if price_match else 0
 
         qty_match = re.search(r"(\d+)\s*\D*在庫", text)
         quantity = int(qty_match.group(1)) if qty_match else 0
@@ -126,20 +138,14 @@ class Scraper:
                     try:
                         card_html = self.fetch_page(card_url)
                         card = self.parse_card_page(card_html)
+                        if not card.number:
+                            continue  # skip invalid card
                     except requests.RequestException:
-                        card = Card(
-                            name=card_name,
-                            rarity=rarity,
-                            url=card_url,
-                            image=b"",
-                            number="",
-                            price=0,
-                            quantity=0,
-                        )
-                    else:
-                        card.rarity = rarity
-                        card.url = card_url
-                        card.name = card_name
+                        continue
+
+                    card.rarity = rarity
+                    card.url = card_url
+                    card.name = card_name
 
                     cards.append(card)
 
