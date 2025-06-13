@@ -111,11 +111,6 @@ class Scraper:
                             except ValueError:
                                 quantity = 0
 
-        if quantity == 0:
-            text = soup.get_text(" ", strip=True)
-            qty_match = re.search(r"(\d+)\s*\D*在庫", text)
-            if qty_match:
-                quantity = int(qty_match.group(1))
 
         return Card(
             name="",
