@@ -69,6 +69,8 @@ class Scraper:
         number = ""
         price = 0
         quantity = 0
+        feature = ""
+        color = ""
         container = soup.find(class_="col-12")
         if container:
             img_col = container.find(class_="col-lg-5")
@@ -85,6 +87,16 @@ class Scraper:
 
             info_col = container.find(class_="col-lg-7")
             if info_col:
+                table_div = info_col.find(class_="table-responsive")
+                if table_div:
+                    first_tr = table_div.find("tr")
+                    if first_tr:
+                        td_elems = first_tr.find_all("td", class_="text-dark")
+                        if len(td_elems) >= 1:
+                            feature = td_elems[0].get_text(strip=True)
+                        if len(td_elems) >= 2:
+                            color = td_elems[1].get_text(strip=True)
+
                 d_flex_list = info_col.find_all(class_="d-flex")
                 if d_flex_list:
                     border_elem = d_flex_list[0].find(class_="border")
@@ -120,8 +132,8 @@ class Scraper:
             number=number,
             price=price,
             quantity=quantity,
-            feature="",
-            color="",
+            feature=feature,
+            color=color,
         )
 
     def parse_product_page(self, html: str) -> List[Card]:
