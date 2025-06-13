@@ -68,6 +68,7 @@ class Scraper:
         img_bytes = b""
         number = ""
         price = 0
+        quantity = 0
         container = soup.find(class_="col-12")
         if container:
             img_col = container.find(class_="col-lg-5")
@@ -90,7 +91,8 @@ class Scraper:
                     if border_elem:
                         number = border_elem.get_text(strip=True)
                 if len(d_flex_list) >= 2:
-                    price_elem = d_flex_list[1].find("h4", class_="fw-bold")
+                    second_flex = d_flex_list[1]
+                    price_elem = second_flex.find("h4", class_="fw-bold")
                     if price_elem:
                         price_text = price_elem.get_text(strip=True)
                         try:
@@ -98,10 +100,22 @@ class Scraper:
                         except ValueError:
                             price = 0
 
-        text = soup.get_text(" ", strip=True)
+                    label_elem = second_flex.find("label", class_="form-check-label")
+                    if label_elem:
+                        label_text = label_elem.get_text(strip=True)
+                        m = re.search(r"在庫\s*:\s*(\S+)\s*点", label_text)
+                        if m:
+                            qty_str = m.group(1)
+                            try:
+                                quantity = int(qty_str)
+                            except ValueError:
+                                quantity = 0
 
-        qty_match = re.search(r"(\d+)\s*\D*在庫", text)
-        quantity = int(qty_match.group(1)) if qty_match else 0
+        if quantity == 0:
+            text = soup.get_text(" ", strip=True)
+            qty_match = re.search(r"(\d+)\s*\D*在庫", text)
+            if qty_match:
+                quantity = int(qty_match.group(1))
 
         return Card(
             name="",
