@@ -15,7 +15,7 @@ class Card:
     name: str
     rarity: str
     url: str
-    image: str
+    image: bytes
     number: str
     price: int
     quantity: int

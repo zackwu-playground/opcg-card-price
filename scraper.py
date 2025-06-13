@@ -65,8 +65,20 @@ class Scraper:
         """解析單一卡片頁面以取得詳細資訊 (不含卡片名稱)。"""
         soup = BeautifulSoup(html, "html.parser")
 
-        img_elem = soup.find("img")
-        img = img_elem["src"] if img_elem and img_elem.has_attr("src") else ""
+        img_bytes = b""
+        container = soup.find(class_="col-12")
+        if container:
+            img_col = container.find(class_="col-lg-5")
+            if img_col:
+                img_elem = img_col.find("img", class_="vimg", src=True)
+                if img_elem and img_elem["src"].endswith(".jpg"):
+                    img_url = img_elem["src"]
+                    try:
+                        resp = self.session.get(img_url, timeout=self.timeout)
+                        resp.raise_for_status()
+                        img_bytes = resp.content
+                    except requests.RequestException:
+                        img_bytes = b""
 
         text = soup.get_text(" ", strip=True)
 
@@ -83,7 +95,7 @@ class Scraper:
             name="",
             rarity="",
             url="",
-            image=img,
+            image=img_bytes,
             number=number,
             price=price,
             quantity=quantity,
@@ -119,7 +131,7 @@ class Scraper:
                             name=card_name,
                             rarity=rarity,
                             url=card_url,
-                            image="",
+                            image=b"",
                             number="",
                             price=0,
                             quantity=0,
