@@ -4,7 +4,7 @@
 ========================
 Python 3.11+
 核心功能：
-1. 每日定時抓取指定網站資料
+1. 抓取指定網站資料
 2. 以 SQLite 儲存結果
 3. 內建 GUI (PyQt5) 顯示統計與曲線圖
 
@@ -12,7 +12,6 @@ Python 3.11+
     requests
     beautifulsoup4
     sqlalchemy
-    apscheduler
     pandas
     matplotlib
     PyQt5
@@ -21,7 +20,7 @@ Python 3.11+
     pip install -r requirements.txt
 
 啟動範例 (含 GUI)：
-    python web_scraper_tool.py --url https://example.com --hour 4 --minute 0 --gui
+    python web_scraper_tool.py --url https://example.com --gui
 """
 
 import sys
@@ -30,7 +29,6 @@ from typing import List, Dict
 
 import pandas as pd
 import requests
-from apscheduler.schedulers.background import BackgroundScheduler
 from bs4 import BeautifulSoup
 from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -167,25 +165,6 @@ class StatsWindow(QMainWindow):
         self.canvas.draw()
 
 
-# -----------------------------
-# 定時排程 (APScheduler)
-# -----------------------------
-
-def schedule_job(scraper: "Scraper", db: "DatabaseManager", hour: int = 3, minute: int = 0):
-    """建立每天固定時間 (Asia/Taipei) 的排程工作。"""
-    scheduler = BackgroundScheduler(timezone="Asia/Taipei")
-    scheduler.add_job(
-        scraper.run,
-        "cron",
-        args=[db],
-        hour=hour,
-        minute=minute,
-        id="daily_scrape",
-        replace_existing=True,
-    )
-    scheduler.start()
-    print(f"Scheduler started: daily job at {hour:02d}:{minute:02d} Asia/Taipei")
-    return scheduler
 
 
 # -----------------------------
@@ -194,13 +173,10 @@ def schedule_job(scraper: "Scraper", db: "DatabaseManager", hour: int = 3, minut
 
 def main() -> None:
     import argparse
-    import time
 
     parser = argparse.ArgumentParser(description="Professional Web Scraping Tool")
     parser.add_argument("--url", required=True, help="Target website URL")
-    parser.add_argument("--hour", type=int, default=3, help="Daily scrape hour (0-23)")
-    parser.add_argument("--minute", type=int, default=0, help="Daily scrape minute")
-    parser.add_argument("--gui", action="store_true", help="Launch GUI after scheduler start")
+    parser.add_argument("--gui", action="store_true", help="Launch GUI after scraping")
     args = parser.parse_args()
 
     db = DatabaseManager()
@@ -209,19 +185,13 @@ def main() -> None:
     # 立即先跑一次 (避免等待排程)；可視需求移除
     scraper.run(db)
 
-    scheduler = schedule_job(scraper, db, args.hour, args.minute)
-
     if args.gui:
         app = QApplication(sys.argv)
         win = StatsWindow(db)
         win.show()
         sys.exit(app.exec())
     else:
-        try:
-            while True:  # 保持主執行緒存活
-                time.sleep(60)
-        except (KeyboardInterrupt, SystemExit):
-            scheduler.shutdown()
+        print("[✓] Scraping completed.")
 
 
 if __name__ == "__main__":
