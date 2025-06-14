@@ -72,7 +72,9 @@ class Scraper:
         quantity = 0
         feature = ""
         color = ""
-        container = soup.find(class_="col-12")
+        container = soup.find(
+            "section", class_="product-detail", id="product-detail"
+        )
         if container:
             img_col = container.find(class_="col-lg-5")
             if img_col:
