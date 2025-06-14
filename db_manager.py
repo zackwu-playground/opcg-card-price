@@ -8,7 +8,7 @@ separate table ``CardPrice``. Other card information is stored once in
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date
 from typing import List
 
 from sqlalchemy import (
@@ -16,7 +16,7 @@ from sqlalchemy import (
     Column,
     Integer,
     String,
-    DateTime,
+    Date,
     LargeBinary,
     ForeignKey,
     UniqueConstraint,
@@ -68,7 +68,7 @@ class CardPrice(Base):
     card_id: int = Column(Integer, ForeignKey("card.id"), nullable=False)
     price: int = Column(Integer, nullable=False)
     quantity: int = Column(Integer, nullable=False)
-    scraped_at: datetime = Column(DateTime, default=datetime.utcnow, nullable=False)
+    scraped_at: date = Column(Date, default=date.today, nullable=False)
 
 
 class DatabaseManager:
