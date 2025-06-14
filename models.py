@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import List
 
 __all__ = ["Card", "Product"]
@@ -19,6 +20,7 @@ class Card:
     number: str
     price: int
     quantity: int
+    scraped_at: datetime
     feature: str = ""
     color: str = ""
 

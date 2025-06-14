@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from typing import List
+from datetime import datetime
 
 from models import Product, Card
 
@@ -132,6 +133,7 @@ class Scraper:
             number=number,
             price=price,
             quantity=quantity,
+            scraped_at=datetime.utcnow(),
             feature=feature,
             color=color,
         )
