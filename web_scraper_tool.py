@@ -20,7 +20,14 @@ Python 3.11+
     pip install -r requirements.txt
 
 啟動範例 (含 GUI)：
-    python web_scraper_tool.py --url https://example.com --gui
+    # 僅更新資料庫
+    python web_scraper_tool.py --url https://example.com --update-db
+
+    # 直接啟動 GUI (使用既有資料庫)
+    python web_scraper_tool.py --gui
+
+    # 先更新資料庫再開啟 GUI
+    python web_scraper_tool.py --url https://example.com --update-db --gui
 """
 
 import sys
@@ -175,23 +182,32 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Professional Web Scraping Tool")
-    parser.add_argument("--url", required=True, help="Target website URL")
-    parser.add_argument("--gui", action="store_true", help="Launch GUI after scraping")
+    parser.add_argument("--url", help="Target website URL for scraping")
+    parser.add_argument(
+        "--update-db",
+        action="store_true",
+        help="Fetch data from the target URL and update the database",
+    )
+    parser.add_argument("--gui", action="store_true", help="Launch GUI")
     args = parser.parse_args()
 
-    db = DatabaseManager()
-    scraper = Scraper(args.url)
+    if args.update_db and not args.url:
+        parser.error("--update-db requires --url")
 
-    # 立即先跑一次 (避免等待排程)；可視需求移除
-    scraper.run(db)
+    db = DatabaseManager()
+
+    if args.update_db:
+        scraper = Scraper(args.url)
+        scraper.run(db)
 
     if args.gui:
         app = QApplication(sys.argv)
         win = StatsWindow(db)
         win.show()
         sys.exit(app.exec())
-    else:
-        print("[✓] Scraping completed.")
+
+    if not (args.update_db or args.gui):
+        parser.print_help()
 
 
 if __name__ == "__main__":
