@@ -142,7 +142,8 @@ class Scraper:
         """解析產品頁面以取得卡片清單，依稀有度排序。"""
         soup = BeautifulSoup(html, "html.parser")
 
-        container = soup.find(class_="col-12")
+        # ▸ 主要卡片列表區塊
+        container = soup.find(class_="col-12 mb-5 pb-5")
         if not container:
             return []
 
