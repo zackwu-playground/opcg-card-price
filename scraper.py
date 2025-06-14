@@ -150,34 +150,36 @@ class Scraper:
             return []
 
         cards: List[Card] = []
-        card_list = container.find("div", id="card-list3", class_="py-4")
-        if not card_list:
+        card_lists = container.find_all("div", id="card-list3", class_="py-4")
+        if not card_lists:
             return cards
-        rarity_elem = card_list.find(class_="py-2")
-        rarity = rarity_elem.get_text(strip=True) if rarity_elem else ""
 
-        for row in card_list.select("div.row"):
-            for col in row.select("div.col-md"):
-                link = col.find("a", href=True)
-                if not link:
-                    continue
-                card_url = link["href"]
-                name_tag = col.find(class_="text-primary")
-                card_name = name_tag.get_text(strip=True) if name_tag else ""
+        for card_list in card_lists:
+            rarity_elem = card_list.find(class_="py-2")
+            rarity = rarity_elem.get_text(strip=True) if rarity_elem else ""
 
-                try:
-                    card_html = self.fetch_page(card_url)
-                    card = self.parse_card_page(card_html)
-                    if not card.number:
-                        continue  # skip invalid card
-                except requests.RequestException:
-                    continue
+            for row in card_list.select("div.row"):
+                for col in row.select("div.col-md"):
+                    link = col.find("a", href=True)
+                    if not link:
+                        continue
+                    card_url = link["href"]
+                    name_tag = col.find(class_="text-primary")
+                    card_name = name_tag.get_text(strip=True) if name_tag else ""
 
-                card.rarity = rarity
-                card.url = card_url
-                card.name = card_name
+                    try:
+                        card_html = self.fetch_page(card_url)
+                        card = self.parse_card_page(card_html)
+                        if not card.number:
+                            continue  # skip invalid card
+                    except requests.RequestException:
+                        continue
 
-                cards.append(card)
+                    card.rarity = rarity
+                    card.url = card_url
+                    card.name = card_name
+
+                    cards.append(card)
 
         return cards
 
