@@ -31,6 +31,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--minute", type=int, default=0, help="Execution minute (0-59)")
     parser.add_argument("--gui", action="store_true", help="Launch Qt GUI after scheduler starts")
     parser.add_argument("--once", action="store_true", help="Run once immediately and exit (debug)")
+    parser.add_argument(
+        "--manual",
+        action="store_true",
+        help="Manually trigger scraping once and store to DB",
+    )
     return parser
 
 
@@ -56,6 +61,10 @@ def main():
 
     # 先確認 DB 檔存在與否，不存在會自動建立
     Path(args.db).touch(exist_ok=True)
+
+    if args.manual:
+        create_job(args.url, args.db)()
+        sys.exit(0)
 
     if args.once:
         create_job(args.url, args.db)()
