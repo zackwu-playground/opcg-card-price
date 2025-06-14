@@ -48,3 +48,7 @@ def main():
     # 直接執行一次 --------------------------------------------------------
     create_job(args.url, args.db)()
     print("[✓] Scraping completed.")
+
+
+if __name__ == "__main__":
+    main()
