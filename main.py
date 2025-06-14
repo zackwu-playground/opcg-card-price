@@ -43,7 +43,7 @@ def create_job(url: str, db_path: str) -> Callable[[], None]:
         data = scr.parse(html)
         if data:
             db = DatabaseManager(db_path)
-            db.insert_records(data)
+            db.insert_products(data)
             print(f"[✓] {len(data)} records inserted.")
         else:
             print("[!] No data scraped – check selectors?")
