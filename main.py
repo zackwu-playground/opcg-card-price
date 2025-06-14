@@ -1,32 +1,24 @@
 # -*- coding: utf-8 -*-
 """main.py
-程式進入點 – 組合 Scraper / DB / GUI
-=====================================
+程式進入點 – 組合 Scraper 與資料庫
+===============================
 執行範例：
-    python main.py --url https://yuyu-tei.jp/top/opc --db scraped_data.db --gui
+    python main.py --url https://yuyu-tei.jp/top/opc --db scraped_data.db
 """
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 from typing import Callable
 
 from scraper import Scraper
 from db_manager import DatabaseManager
 
-# GUI 部分僅在需要時匯入，避免無頭環境出錯
-try:
-    from gui_app import StatsWindow  # noqa: F401
-except ImportError:
-    StatsWindow = None  # type: ignore
-
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Daily web scraper with optional GUI")
+    parser = argparse.ArgumentParser(description="Daily web scraper")
     parser.add_argument("--url", required=True, help="Target URL to scrape")
     parser.add_argument("--db", default="scraped_data.db", help="SQLite file path")
-    parser.add_argument("--gui", action="store_true", help="Launch Qt GUI after scraping")
     return parser
 
 
@@ -55,22 +47,4 @@ def main():
 
     # 直接執行一次 --------------------------------------------------------
     create_job(args.url, args.db)()
-
-    # optionally launch GUI ----------------------------------------------
-    if args.gui:
-        if StatsWindow is None:
-            print("[!] PyQt5 / matplotlib not installed – cannot launch GUI")
-            sys.exit(1)
-        else:
-            from PyQt5.QtWidgets import QApplication
-
-            app = QApplication(sys.argv)
-            window = StatsWindow(db_path=args.db)
-            window.show()
-            sys.exit(app.exec_())
-    else:
-        print("[✓] Scraping completed.")
-
-
-if __name__ == "__main__":
-    main()
+    print("[✓] Scraping completed.")
