@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """main.py
-程式進入點 – 組合 Scraper / DB / GUI
-=====================================
+程式進入點 – 組合 Scraper 與資料庫
+===============================
 執行範例：
-    python main.py --url https://yuyu-tei.jp/top/opc --db scraped_data.db --gui
+    python main.py --url https://yuyu-tei.jp/top/opc --db scraped_data.db
 """
 from __future__ import annotations
 
@@ -16,10 +16,9 @@ from db_manager import DatabaseManager
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Daily web scraper with optional GUI")
+    parser = argparse.ArgumentParser(description="Daily web scraper")
     parser.add_argument("--url", required=True, help="Target URL to scrape")
     parser.add_argument("--db", default="scraped_data.db", help="SQLite file path")
-    parser.add_argument("--gui", action="store_true", help="Launch Qt GUI after scraping")
     return parser
 
 
