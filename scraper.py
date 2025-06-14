@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from typing import List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 
 from models import Product, Card
@@ -24,9 +25,10 @@ __all__ = ["Scraper"]
 class Scraper:
     """負責下載 HTML 與解析指定元素。"""
 
-    def __init__(self, url: str, timeout: int = 10) -> None:
+    def __init__(self, url: str, timeout: int = 10, max_workers: int = 5) -> None:
         self.url = url
         self.timeout = timeout
+        self.max_workers = max_workers
         # 改用 Session 可重複利用 TCP 連線並設定通用 headers
         self.session: requests.Session = requests.Session()
         self.session.headers.update(
@@ -170,21 +172,31 @@ class Scraper:
                     entries.append((card_url, card_name, rarity))
 
         total = len(entries)
-        for idx, (card_url, card_name, rarity) in enumerate(entries, 1):
-            print(f"[parse_product_page] {idx}/{total} {card_name}", flush=True)
+
+        def worker(entry: tuple[str, str, str]) -> Card | None:
+            card_url, card_name, rarity = entry
             try:
                 card_html = self.fetch_page(card_url)
                 card = self.parse_card_page(card_html)
                 if not card.number:
-                    continue  # skip invalid card
+                    return None
+                card.rarity = rarity
+                card.url = card_url
+                card.name = card_name
+                return card
             except requests.RequestException:
-                continue
+                return None
 
-            card.rarity = rarity
-            card.url = card_url
-            card.name = card_name
-
-            cards.append(card)
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = [executor.submit(worker, e) for e in entries]
+            for idx, f in enumerate(as_completed(futures), 1):
+                card = f.result()
+                if card:
+                    cards.append(card)
+                print(
+                    f"[parse_product_page] {idx}/{total} {card.name if card else ''}",
+                    flush=True,
+                )
 
         return cards
 
