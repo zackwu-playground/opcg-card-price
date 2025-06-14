@@ -63,6 +63,9 @@ class CardPrice(Base):
     """Time series table for price/quantity."""
 
     __tablename__ = "card_price"
+    __table_args__ = (
+        UniqueConstraint("card_id", "scraped_at", name="uix_card_price_date"),
+    )
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
     card_id: int = Column(Integer, ForeignKey("card.id"), nullable=False)
@@ -119,14 +122,22 @@ class DatabaseManager:
                         session.add(card_obj)
                         session.flush()
 
-                    session.add(
-                        CardPrice(
-                            card_id=card_obj.id,
-                            price=card.price,
-                            quantity=card.quantity,
-                            scraped_at=card.scraped_at,
-                        )
+                    # Skip insertion when a price for this card was already
+                    # recorded on the same date.
+                    existing_price = (
+                        session.query(CardPrice)
+                        .filter_by(card_id=card_obj.id, scraped_at=card.scraped_at)
+                        .first()
                     )
+                    if existing_price is None:
+                        session.add(
+                            CardPrice(
+                                card_id=card_obj.id,
+                                price=card.price,
+                                quantity=card.quantity,
+                                scraped_at=card.scraped_at,
+                            )
+                        )
             session.commit()
 
     def fetch_dataframe(self):
