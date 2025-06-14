@@ -209,8 +209,10 @@ class Scraper:
         """解析 HTML 取得 button 文字與網址並組成 ``Product`` 物件。"""
         soup = BeautifulSoup(html, "html.parser")
 
-        # ▸ 僅抓取 <div class="tab-content"> 內的 <div class="accordion"> 區塊
-        accordion_divs: List[Tag] = soup.select("div.tab-content div.accordion")
+        # ▸ 僅抓取 <div class="tab-content"> 內的 <div class="accordion accordion-flush"> 區塊
+        accordion_divs: List[Tag] = soup.select(
+            "div.tab-content div.accordion.accordion-flush"
+        )
         results: List[Product] = []
 
         # Precollect product buttons so progress can be shown
