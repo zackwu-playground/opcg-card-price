@@ -81,14 +81,19 @@ class Scraper:
             img_col = container.find(class_="col-lg-5")
             if img_col:
                 img_elem = img_col.find("img", class_="vimg", src=True)
-                if img_elem and img_elem["src"].endswith(".jpg"):
+                if img_elem:
                     img_url = img_elem["src"]
-                    try:
-                        resp = self.session.get(img_url, timeout=self.timeout)
-                        resp.raise_for_status()
-                        img_bytes = resp.content
-                    except requests.RequestException:
-                        img_bytes = b""
+                    if (
+                        img_url.endswith(".jpg")
+                        and img_url
+                        != "https://img.yuyu-tei.jp/card_image/noimage_front.jpg"
+                    ):
+                        try:
+                            resp = self.session.get(img_url, timeout=self.timeout)
+                            resp.raise_for_status()
+                            img_bytes = resp.content
+                        except requests.RequestException:
+                            img_bytes = b""
 
             info_col = container.find(class_="col-lg-7")
             if info_col:
