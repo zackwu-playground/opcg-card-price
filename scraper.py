@@ -154,10 +154,11 @@ class Scraper:
         if not card_lists:
             return cards
 
+        # Precollect all card links so we know the total for progress output
+        entries: List[tuple[str, str, str]] = []
         for card_list in card_lists:
             rarity_elem = card_list.find(class_="py-2")
             rarity = rarity_elem.get_text(strip=True) if rarity_elem else ""
-
             for row in card_list.select("div.row"):
                 for col in row.select("div.col-md"):
                     link = col.find("a", href=True)
@@ -166,20 +167,24 @@ class Scraper:
                     card_url = link["href"]
                     name_tag = col.find(class_="text-primary")
                     card_name = name_tag.get_text(strip=True) if name_tag else ""
+                    entries.append((card_url, card_name, rarity))
 
-                    try:
-                        card_html = self.fetch_page(card_url)
-                        card = self.parse_card_page(card_html)
-                        if not card.number:
-                            continue  # skip invalid card
-                    except requests.RequestException:
-                        continue
+        total = len(entries)
+        for idx, (card_url, card_name, rarity) in enumerate(entries, 1):
+            print(f"[parse_product_page] {idx}/{total} {card_name}", flush=True)
+            try:
+                card_html = self.fetch_page(card_url)
+                card = self.parse_card_page(card_html)
+                if not card.number:
+                    continue  # skip invalid card
+            except requests.RequestException:
+                continue
 
-                    card.rarity = rarity
-                    card.url = card_url
-                    card.name = card_name
+            card.rarity = rarity
+            card.url = card_url
+            card.name = card_name
 
-                    cards.append(card)
+            cards.append(card)
 
         return cards
 
@@ -191,31 +196,34 @@ class Scraper:
         accordion_divs: List[Tag] = soup.select("div.tab-content div.accordion")
         results: List[Product] = []
 
+        # Precollect product buttons so progress can be shown
+        buttons: List[Tag] = []
         for div in accordion_divs:
-            # ▸ 於每個 .accordion 內部僅限 id="side-sell-single" 區塊下
-            #   的 h2.accordion-header > button[onclick]，並排除
-            #   id="side-sell-target-11" 區塊
             for btn in div.select(
                 "div#side-sell-single h2.accordion-header > button[onclick]"
             ):
                 if btn.find_parent(id="side-sell-target-11"):
                     continue
-                onclick_attr = btn.get("onclick", "")
-                # onclick="location.href='https://yuyu-tei.jp/sell/opc/s/op12'"
-                m = re.search(r"location\.href=['\"]([^'\"]+)['\"]", onclick_attr)
-                if not m:
-                    continue  # 跳過 parse 失敗
+                buttons.append(btn)
 
-                product = Product(
-                    name=btn.get_text(strip=True),
-                    url=m.group(1),
-                )
-                try:
-                    product_html = self.fetch_page(product.url)
-                    product.cards = self.parse_product_page(product_html)
-                except requests.RequestException:
-                    product.cards = []
-                results.append(product)
+        total = len(buttons)
+        for idx, btn in enumerate(buttons, 1):
+            onclick_attr = btn.get("onclick", "")
+            m = re.search(r"location\.href=['\"]([^'\"]+)['\"]", onclick_attr)
+            if not m:
+                continue
+
+            print(f"[parse] {idx}/{total} {btn.get_text(strip=True)}", flush=True)
+            product = Product(
+                name=btn.get_text(strip=True),
+                url=m.group(1),
+            )
+            try:
+                product_html = self.fetch_page(product.url)
+                product.cards = self.parse_product_page(product_html)
+            except requests.RequestException:
+                product.cards = []
+            results.append(product)
         return results
 
 
