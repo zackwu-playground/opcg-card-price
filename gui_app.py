@@ -38,6 +38,8 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QComboBox,
+    QLineEdit,
+    QCompleter,
     QAbstractItemView,
     QLabel,
     QSpinBox,
@@ -71,8 +73,9 @@ class StatsWindow(QMainWindow):
         # Filter widgets -------------------------------------------------
         self.product_list = self._create_list_widget(min_width=120)
         self.rarity_list = self._create_combo_box()
-        self.feature_list = self._create_combo_box()
         self.color_list = self._create_combo_box()
+        self.number_edit = QLineEdit()
+        self.number_edit.setMinimumWidth(150)
 
         self.min_price = QSpinBox()
         self.max_price = QSpinBox()
@@ -95,8 +98,8 @@ class StatsWindow(QMainWindow):
         filter_row1.addWidget(self.rarity_list)
 
         filter_row2 = QHBoxLayout()
-        filter_row2.addWidget(QLabel("Feature"))
-        filter_row2.addWidget(self.feature_list)
+        filter_row2.addWidget(QLabel("Number"))
+        filter_row2.addWidget(self.number_edit)
         filter_row2.addWidget(QLabel("Color"))
         filter_row2.addWidget(self.color_list)
 
@@ -153,7 +156,6 @@ class StatsWindow(QMainWindow):
         for widget, column in [
             (self.product_list, "product"),
             (self.rarity_list, "rarity"),
-            (self.feature_list, "feature"),
             (self.color_list, "color"),
         ]:
             widget.clear()
@@ -165,6 +167,21 @@ class StatsWindow(QMainWindow):
                 widget.addItem("")
                 for value in values:
                     widget.addItem(value)
+
+        # Fixed width for product list based on longest item
+        if not self.df.empty:
+            metrics = self.product_list.fontMetrics()
+            products = [str(v) for v in sorted(self.df["product"].dropna().unique())]
+            if products:
+                width = max(metrics.boundingRect(p).width() for p in products) + 20
+                self.product_list.setFixedWidth(width)
+
+        # Completer for card number entry
+        numbers = [str(v) for v in sorted(self.df["number"].dropna().unique())]
+        completer = QCompleter(numbers)
+        completer.setCaseSensitivity(QtCore.Qt.CaseInsensitive)
+        completer.setFilterMode(QtCore.Qt.MatchContains)
+        self.number_edit.setCompleter(completer)
 
         if not self.df.empty:
             self.min_price.setValue(int(self.df["price"].min()))
@@ -201,9 +218,9 @@ class StatsWindow(QMainWindow):
         if selections:
             df = df[df["rarity"].isin(selections)]
 
-        selections = self._selected_values(self.feature_list)
-        if selections:
-            df = df[df["feature"].isin(selections)]
+        number_text = self.number_edit.text().strip()
+        if number_text:
+            df = df[df["number"].str.contains(number_text, na=False)]
 
         selections = self._selected_values(self.color_list)
         if selections:
