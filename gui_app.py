@@ -16,6 +16,18 @@ from typing import Iterable
 import pandas as pd
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
+
+# Use a font that supports CJK characters so card names display correctly
+plt.rcParams["font.family"] = "sans-serif"
+plt.rcParams["font.sans-serif"] = [
+    "Noto Sans CJK JP",
+    "Microsoft JhengHei",
+    "SimHei",
+    "Source Han Sans",
+    "Arial Unicode MS",
+    "DejaVu Sans",
+]
+plt.rcParams["axes.unicode_minus"] = False
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -86,14 +98,10 @@ class StatsWindow(QMainWindow):
         filter_row2.addWidget(self.color_list)
 
         filter_row3 = QHBoxLayout()
-        filter_row3.addWidget(QLabel("Min price"))
-        filter_row3.addWidget(self.min_price)
-        filter_row3.addWidget(QLabel("Max price"))
-        filter_row3.addWidget(self.max_price)
-        filter_row3.addWidget(QLabel("Start"))
-        filter_row3.addWidget(self.start_date)
-        filter_row3.addWidget(QLabel("End"))
-        filter_row3.addWidget(self.end_date)
+        self._add_labeled(filter_row3, "Min price", self.min_price)
+        self._add_labeled(filter_row3, "Max price", self.max_price)
+        self._add_labeled(filter_row3, "Start", self.start_date)
+        self._add_labeled(filter_row3, "End", self.end_date)
         filter_row3.addWidget(self.refresh_btn)
         filter_row3.addWidget(self.plot_btn)
 
@@ -114,6 +122,16 @@ class StatsWindow(QMainWindow):
         lst.setSelectionMode(QAbstractItemView.MultiSelection)
         lst.setMinimumWidth(150)
         return lst
+
+    # ------------------------------------------------------------------
+    def _add_labeled(self, layout: QHBoxLayout, text: str, widget: QWidget) -> None:
+        """Helper to place a label next to a widget with minimal spacing."""
+        container = QHBoxLayout()
+        container.setSpacing(2)
+        container.setContentsMargins(0, 0, 0, 0)
+        container.addWidget(QLabel(text))
+        container.addWidget(widget)
+        layout.addLayout(container)
 
     # ------------------------------------------------------------------
     def load_data(self) -> None:
