@@ -76,6 +76,7 @@ class StatsWindow(QMainWindow):
         self.product_list.setFixedHeight(self.height() // 2)
         self.product_list.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.rarity_list = self._create_combo_box()
+        self.color_list = self._create_combo_box()
         self.number_edit = QLineEdit()
         self.number_edit.setMinimumWidth(150)
 
@@ -114,6 +115,10 @@ class StatsWindow(QMainWindow):
         rarity_row.addWidget(QLabel("Rarity"))
         rarity_row.addWidget(self.rarity_list)
 
+        color_row = QHBoxLayout()
+        color_row.addWidget(QLabel("Color"))
+        color_row.addWidget(self.color_list)
+
         btn_row = QHBoxLayout()
         btn_row.addWidget(self.refresh_btn)
         btn_row.addWidget(self.plot_btn)
@@ -123,6 +128,7 @@ class StatsWindow(QMainWindow):
         right_layout.addLayout(date_row)
         right_layout.addLayout(price_row)
         right_layout.addLayout(rarity_row)
+        right_layout.addLayout(color_row)
         right_layout.addLayout(btn_row)
 
         filters_layout = QHBoxLayout()
