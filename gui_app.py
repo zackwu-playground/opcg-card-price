@@ -47,6 +47,8 @@ from PyQt5.QtWidgets import (
     QDateEdit,
     QPushButton,
     QSizePolicy,
+    QDialog,
+    QDialogButtonBox,
 )
 from PyQt5 import QtCore
 from PyQt5.QtCore import QDate
@@ -59,6 +61,39 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).with_name('.env'))
 
 __all__ = ["StatsWindow", "launch_gui"]
+
+
+class SettingsDialog(QDialog):
+    """Dialog for selecting how many curves to display."""
+
+    def __init__(self, parent=None, mode: str = "大", count: int | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("設定")
+
+        self.mode_box = QComboBox()
+        self.mode_box.addItems(["大", "小"])
+        if mode in ("大", "小"):
+            self.mode_box.setCurrentText(mode)
+
+        self.count_box = QSpinBox()
+        self.count_box.setRange(1, 1000)
+        if count is not None:
+            self.count_box.setValue(count)
+
+        layout = QVBoxLayout(self)
+        row = QHBoxLayout()
+        row.addWidget(self.mode_box)
+        row.addWidget(self.count_box)
+        layout.addLayout(row)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def values(self) -> tuple[str, int]:
+        return self.mode_box.currentText(), self.count_box.value()
+
 
 class StatsWindow(QMainWindow):
     """Simple statistics viewer with filter options."""
@@ -78,6 +113,12 @@ class StatsWindow(QMainWindow):
         self.image_label.setAlignment(QtCore.Qt.AlignCenter)
         self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.image_label.setScaledContents(True)
+
+        self.show_top_mode: str = "大"
+        self.show_top_n: int | None = None
+
+        self.settings_btn = QPushButton("開啟設定")
+        self.settings_btn.clicked.connect(self._open_settings)
 
         # Filter widgets -------------------------------------------------
         self.product_list = self._create_list_widget(min_width=120)
@@ -161,7 +202,12 @@ class StatsWindow(QMainWindow):
         central = QWidget()
         main_layout = QHBoxLayout(central)
         main_layout.addWidget(filters_widget)
-        main_layout.addWidget(self.canvas)
+
+        chart_layout = QVBoxLayout()
+        chart_layout.addWidget(self.settings_btn, alignment=QtCore.Qt.AlignLeft)
+        chart_layout.addWidget(self.canvas)
+
+        main_layout.addLayout(chart_layout)
         main_layout.setStretch(0, 0)
         main_layout.setStretch(1, 1)
         self.setCentralWidget(central)
@@ -278,6 +324,13 @@ class StatsWindow(QMainWindow):
             self.image_label.setText("No image")
 
     # ------------------------------------------------------------------
+    def _open_settings(self) -> None:
+        dlg = SettingsDialog(self, self.show_top_mode, self.show_top_n)
+        if dlg.exec_() == QDialog.Accepted:
+            self.show_top_mode, self.show_top_n = dlg.values()
+            self.update_plot()
+
+    # ------------------------------------------------------------------
     def update_plot(self) -> None:
         """Filter ``self.df`` based on UI selections and update the chart."""
         if self.df.empty:
@@ -319,6 +372,14 @@ class StatsWindow(QMainWindow):
             .drop_duplicates()
             .set_index("card")
         )
+
+        if self.show_top_n:
+            agg = grouped.groupby("card")["price"]
+            series = agg.max() if self.show_top_mode == "大" else agg.min()
+            asc = self.show_top_mode == "小"
+            top_cards = set(series.sort_values(ascending=asc).head(self.show_top_n).index)
+            grouped = grouped[grouped["card"].isin(top_cards)]
+            meta = meta.loc[meta.index.intersection(top_cards)]
 
         line_count = 0
         for card_name, data in grouped.groupby("card"):
