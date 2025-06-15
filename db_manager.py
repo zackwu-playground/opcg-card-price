@@ -91,6 +91,9 @@ class DatabaseManager:
         db_path = db_path or "scraped_data.db"
         self.db_path = Path(db_path)
         self.base_dir = self.db_path.parent
+        # Picture files are stored under <db_dir>/picture/<product>/<card>.jpg
+        self.picture_dir = self.base_dir / "picture"
+        self.picture_dir.mkdir(exist_ok=True)
 
         self.engine = create_engine(f"sqlite:///{self.db_path}", echo=False, future=True)
         Base.metadata.create_all(self.engine)
@@ -116,8 +119,8 @@ class DatabaseManager:
                     session.flush()
 
                 safe_prod = re.sub(r"[\\/:*?\"<>|]", "_", product.name)
-                prod_dir = self.base_dir / safe_prod
-                prod_dir.mkdir(exist_ok=True)
+                prod_dir = self.picture_dir / safe_prod
+                prod_dir.mkdir(parents=True, exist_ok=True)
 
                 for card in product.cards:
                     card_obj = (
