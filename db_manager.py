@@ -198,6 +198,8 @@ class DatabaseManager:
                         "card": card.name,
                         "number": card.number,
                         "rarity": rarity.name,
+                        "feature": card.feature,
+                        "color": card.color,
                         "price": price.price,
                         "quantity": price.quantity,
                         "scraped_at": price.scraped_at,
