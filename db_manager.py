@@ -9,6 +9,8 @@ separate table ``CardPrice``. Other card information is stored once in
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
+import re
 from typing import List
 
 from sqlalchemy import (
@@ -17,7 +19,6 @@ from sqlalchemy import (
     Integer,
     String,
     Date,
-    LargeBinary,
     ForeignKey,
     UniqueConstraint,
 )
@@ -53,7 +54,6 @@ class CardTable(Base):
     name: str = Column(String(255), nullable=False)
     rarity: str = Column(String(50), nullable=False)
     url: str = Column(String(1024), nullable=False)
-    image: bytes = Column(LargeBinary)
     number: str = Column(String(50), nullable=False)
     feature: str = Column(String(50), default="")
     color: str = Column(String(50), default="")
@@ -79,7 +79,10 @@ class DatabaseManager:
 
     def __init__(self, db_path: str | None = None):
         db_path = db_path or "scraped_data.db"
-        self.engine = create_engine(f"sqlite:///{db_path}", echo=False, future=True)
+        self.db_path = Path(db_path)
+        self.base_dir = self.db_path.parent
+
+        self.engine = create_engine(f"sqlite:///{self.db_path}", echo=False, future=True)
         Base.metadata.create_all(self.engine)
         self.SessionLocal = sessionmaker(bind=self.engine, expire_on_commit=False, future=True)
 
@@ -102,6 +105,10 @@ class DatabaseManager:
                     session.add(prod_obj)
                     session.flush()
 
+                safe_prod = re.sub(r"[\\/:*?\"<>|]", "_", product.name)
+                prod_dir = self.base_dir / safe_prod
+                prod_dir.mkdir(exist_ok=True)
+
                 for card in product.cards:
                     card_obj = (
                         session.query(CardTable)
@@ -109,12 +116,17 @@ class DatabaseManager:
                         .one_or_none()
                     )
                     if card_obj is None:
+                        if card.image:
+                            safe_card = re.sub(r"[\\/:*?\"<>|]", "_", card.name)
+                            file_path = prod_dir / f"{safe_card}.jpg"
+                            if not file_path.exists():
+                                file_path.write_bytes(card.image)
+
                         card_obj = CardTable(
                             product_id=prod_obj.id,
                             name=card.name,
                             rarity=card.rarity,
                             url=card.url,
-                            image=card.image,
                             number=card.number,
                             feature=card.feature,
                             color=card.color,
