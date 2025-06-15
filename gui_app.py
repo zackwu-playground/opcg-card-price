@@ -9,7 +9,7 @@ allowed for the categorical filters.
 """
 from __future__ import annotations
 
-import sys
+import sys, os, platform
 from pathlib import Path
 from typing import Iterable
 
@@ -30,12 +30,16 @@ from PyQt5.QtWidgets import (
     QDateEdit,
     QPushButton,
 )
+from PyQt5 import QtCore
 from PyQt5.QtCore import QDate
+from PyQt5.QtCore import QLibraryInfo
 
 from db_manager import DatabaseManager
 
-__all__ = ["StatsWindow", "launch_gui"]
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).with_name('.env'))
 
+__all__ = ["StatsWindow", "launch_gui"]
 
 class StatsWindow(QMainWindow):
     """Simple statistics viewer with filter options."""
