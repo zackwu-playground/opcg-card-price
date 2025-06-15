@@ -120,6 +120,9 @@ class StatsWindow(QMainWindow):
         self.settings_btn = QPushButton("開啟設定")
         self.settings_btn.clicked.connect(self._open_settings)
 
+        self.reset_btn = QPushButton("重製")
+        self.reset_btn.clicked.connect(self._reset_settings)
+
         # Filter widgets -------------------------------------------------
         self.product_list = self._create_list_widget(min_width=120)
         self.product_list.setFixedHeight(self.height() // 2)
@@ -204,7 +207,11 @@ class StatsWindow(QMainWindow):
         main_layout.addWidget(filters_widget)
 
         chart_layout = QVBoxLayout()
-        chart_layout.addWidget(self.settings_btn, alignment=QtCore.Qt.AlignLeft)
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(self.settings_btn)
+        btn_row.addWidget(self.reset_btn)
+        btn_row.addStretch()
+        chart_layout.addLayout(btn_row)
         chart_layout.addWidget(self.canvas)
 
         main_layout.addLayout(chart_layout)
@@ -331,6 +338,12 @@ class StatsWindow(QMainWindow):
             self.update_plot()
 
     # ------------------------------------------------------------------
+    def _reset_settings(self) -> None:
+        """Reset curve count limit to unlimited and refresh plot."""
+        self.show_top_n = None
+        self.update_plot()
+
+    # ------------------------------------------------------------------
     def update_plot(self) -> None:
         """Filter ``self.df`` based on UI selections and update the chart."""
         if self.df.empty:
@@ -368,8 +381,8 @@ class StatsWindow(QMainWindow):
 
         grouped = df.groupby(["card", "scraped_at"])["price"].mean().reset_index()
         meta = (
-            df[["card", "rarity", "number"]]
-            .drop_duplicates()
+            df[["card", "rarity", "number", "product"]]
+            .drop_duplicates(subset=["card"])
             .set_index("card")
         )
 
@@ -385,7 +398,8 @@ class StatsWindow(QMainWindow):
         for card_name, data in grouped.groupby("card"):
             rarity = meta.loc[card_name, "rarity"] if card_name in meta.index else ""
             number = meta.loc[card_name, "number"] if card_name in meta.index else ""
-            label = f"{rarity} {number}".strip()
+            product = meta.loc[card_name, "product"] if card_name in meta.index else ""
+            label = f"{product} {rarity} {number}".strip()
             line = self.ax.plot(
                 data["scraped_at"],
                 data["price"],
