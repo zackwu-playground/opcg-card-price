@@ -61,6 +61,7 @@ class StatsWindow(QMainWindow):
         self.db_path = db_path
         self.db = DatabaseManager(db_path=db_path)
         self.setWindowTitle("Card Price Stats")
+        self.resize(1000, 600)
 
         self.figure, self.ax = plt.subplots()
         self.canvas = FigureCanvas(self.figure)
@@ -106,11 +107,13 @@ class StatsWindow(QMainWindow):
         filter_row3.addWidget(self.plot_btn)
 
         central = QWidget()
-        layout = QVBoxLayout(central)
-        layout.addLayout(filter_row1)
-        layout.addLayout(filter_row2)
-        layout.addLayout(filter_row3)
-        layout.addWidget(self.canvas)
+        main_layout = QHBoxLayout(central)
+        filters_layout = QVBoxLayout()
+        filters_layout.addLayout(filter_row1)
+        filters_layout.addLayout(filter_row2)
+        filters_layout.addLayout(filter_row3)
+        main_layout.addLayout(filters_layout)
+        main_layout.addWidget(self.canvas)
         self.setCentralWidget(central)
 
         self.df: pd.DataFrame = pd.DataFrame()
