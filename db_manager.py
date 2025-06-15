@@ -22,7 +22,7 @@ from sqlalchemy import (
     ForeignKey,
     UniqueConstraint,
 )
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 
 from models import Product
 
@@ -41,6 +41,15 @@ class ProductTable(Base):
     url: str = Column(String(1024), nullable=False)
 
 
+class RarityTable(Base):
+    """Enumeration table for card rarity."""
+
+    __tablename__ = "rarity"
+
+    id: int = Column(Integer, primary_key=True, autoincrement=True)
+    name: str = Column(String(50), nullable=False, unique=True)
+
+
 class CardTable(Base):
     """Static card information."""
 
@@ -52,7 +61,8 @@ class CardTable(Base):
     id: int = Column(Integer, primary_key=True, autoincrement=True)
     product_id: int = Column(Integer, ForeignKey("product.id"), nullable=False)
     name: str = Column(String(255), nullable=False)
-    rarity: str = Column(String(50), nullable=False)
+    rarity_id: int = Column(Integer, ForeignKey("rarity.id"), nullable=False)
+    rarity = relationship("RarityTable")
     url: str = Column(String(1024), nullable=False)
     number: str = Column(String(50), nullable=False)
     feature: str = Column(String(50), default="")
@@ -116,6 +126,15 @@ class DatabaseManager:
                         .one_or_none()
                     )
                     if card_obj is None:
+                        rarity_obj = (
+                            session.query(RarityTable)
+                            .filter_by(name=card.rarity)
+                            .one_or_none()
+                        )
+                        if rarity_obj is None:
+                            rarity_obj = RarityTable(name=card.rarity)
+                            session.add(rarity_obj)
+                            session.flush()
                         if card.image:
                             safe_card = re.sub(r"[\\/:*?\"<>|]", "_", card.name)
                             file_path = prod_dir / f"{safe_card}.jpg"
@@ -125,7 +144,7 @@ class DatabaseManager:
                         card_obj = CardTable(
                             product_id=prod_obj.id,
                             name=card.name,
-                            rarity=card.rarity,
+                            rarity_id=rarity_obj.id,
                             url=card.url,
                             number=card.number,
                             feature=card.feature,
@@ -162,9 +181,10 @@ class DatabaseManager:
 
         with self.SessionLocal() as session:
             data = (
-                session.query(CardPrice, CardTable, ProductTable)
+                session.query(CardPrice, CardTable, ProductTable, RarityTable)
                 .join(CardTable, CardPrice.card_id == CardTable.id)
                 .join(ProductTable, CardTable.product_id == ProductTable.id)
+                .join(RarityTable, CardTable.rarity_id == RarityTable.id)
                 .order_by(CardPrice.scraped_at)
                 .all()
             )
@@ -174,11 +194,12 @@ class DatabaseManager:
                         "product": prod.name,
                         "card": card.name,
                         "number": card.number,
+                        "rarity": rarity.name,
                         "price": price.price,
                         "quantity": price.quantity,
                         "scraped_at": price.scraped_at,
                     }
-                    for price, card, prod in data
+                    for price, card, prod, rarity in data
                 ]
             )
             return df
