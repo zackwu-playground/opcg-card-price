@@ -3,9 +3,10 @@
 
 This module defines :class:`StatsWindow` which loads card data from the
 SQLite database created by :mod:`db_manager` and displays simple line
-plots using Matplotlib.  Users can filter data by product name, rarity,
-price range, date range, feature and colour.  Multiple selections are
-allowed for the categorical filters.
+plots using Matplotlib. Users can filter data by product name, rarity,
+price range, date range, feature and colour. Multiple selection is
+available only for the product filter; other categories use drop-down
+menus.
 """
 from __future__ import annotations
 
@@ -36,6 +37,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QListWidget,
     QListWidgetItem,
+    QComboBox,
     QAbstractItemView,
     QLabel,
     QSpinBox,
@@ -67,10 +69,10 @@ class StatsWindow(QMainWindow):
         self.canvas = FigureCanvas(self.figure)
 
         # Filter widgets -------------------------------------------------
-        self.product_list = self._create_list_widget()
-        self.rarity_list = self._create_list_widget()
-        self.feature_list = self._create_list_widget()
-        self.color_list = self._create_list_widget()
+        self.product_list = self._create_list_widget(min_width=120)
+        self.rarity_list = self._create_combo_box()
+        self.feature_list = self._create_combo_box()
+        self.color_list = self._create_combo_box()
 
         self.min_price = QSpinBox()
         self.max_price = QSpinBox()
@@ -120,11 +122,18 @@ class StatsWindow(QMainWindow):
         self.load_data()
 
     # ------------------------------------------------------------------
-    def _create_list_widget(self) -> QListWidget:
+    def _create_list_widget(self, min_width: int = 150) -> QListWidget:
         lst = QListWidget()
         lst.setSelectionMode(QAbstractItemView.MultiSelection)
-        lst.setMinimumWidth(150)
+        lst.setMinimumWidth(min_width)
         return lst
+
+    # ------------------------------------------------------------------
+    def _create_combo_box(self) -> QComboBox:
+        box = QComboBox()
+        box.setMinimumWidth(150)
+        box.setEditable(False)
+        return box
 
     # ------------------------------------------------------------------
     def _add_labeled(self, layout: QHBoxLayout, text: str, widget: QWidget) -> None:
@@ -148,8 +157,14 @@ class StatsWindow(QMainWindow):
             (self.color_list, "color"),
         ]:
             widget.clear()
-            for value in sorted(self.df[column].dropna().unique()):
-                QListWidgetItem(str(value), widget)
+            values = [str(v) for v in sorted(self.df[column].dropna().unique())]
+            if isinstance(widget, QListWidget):
+                for value in values:
+                    QListWidgetItem(value, widget)
+            elif isinstance(widget, QComboBox):
+                widget.addItem("")
+                for value in values:
+                    widget.addItem(value)
 
         if not self.df.empty:
             self.min_price.setValue(int(self.df["price"].min()))
@@ -162,8 +177,13 @@ class StatsWindow(QMainWindow):
         self.update_plot()
 
     # ------------------------------------------------------------------
-    def _selected_values(self, widget: QListWidget) -> Iterable[str]:
-        return [item.text() for item in widget.selectedItems()]
+    def _selected_values(self, widget: QWidget) -> Iterable[str]:
+        if isinstance(widget, QListWidget):
+            return [item.text() for item in widget.selectedItems()]
+        if isinstance(widget, QComboBox):
+            text = widget.currentText()
+            return [text] if text else []
+        return []
 
     # ------------------------------------------------------------------
     def update_plot(self) -> None:
@@ -202,10 +222,13 @@ class StatsWindow(QMainWindow):
             return
 
         grouped = df.groupby(["card", "scraped_at"])["price"].mean().reset_index()
+        line_count = 0
         for card_name, data in grouped.groupby("card"):
             self.ax.plot(data["scraped_at"], data["price"], marker="o", label=card_name)
+            line_count += 1
 
-        self.ax.legend()
+        if line_count <= 10:
+            self.ax.legend()
         self.ax.set_xlabel("Date")
         self.ax.set_ylabel("Price")
         self.figure.autofmt_xdate()
