@@ -13,6 +13,7 @@ from __future__ import annotations
 import sys, os, platform
 from pathlib import Path
 from typing import Iterable
+import re
 
 import pandas as pd
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -50,6 +51,7 @@ from PyQt5.QtWidgets import (
 from PyQt5 import QtCore
 from PyQt5.QtCore import QDate
 from PyQt5.QtCore import QLibraryInfo
+from PyQt5.QtGui import QPixmap
 
 from db_manager import DatabaseManager
 
@@ -70,6 +72,12 @@ class StatsWindow(QMainWindow):
 
         self.figure, self.ax = plt.subplots()
         self.canvas = FigureCanvas(self.figure)
+        self.canvas.mpl_connect("pick_event", self._on_pick)
+
+        self.image_label = QLabel("No image")
+        self.image_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.image_label.setScaledContents(True)
 
         # Filter widgets -------------------------------------------------
         self.product_list = self._create_list_widget(min_width=120)
@@ -135,10 +143,20 @@ class StatsWindow(QMainWindow):
         filters_layout.addLayout(left_layout)
         filters_layout.addLayout(right_layout)
 
+        filter_top_widget = QWidget()
+        filter_top_widget.setLayout(filters_layout)
+        filter_top_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+
+        filter_area_layout = QVBoxLayout()
+        filter_area_layout.addWidget(filter_top_widget)
+        filter_area_layout.addWidget(self.image_label)
+        filter_area_layout.setStretch(0, 0)
+        filter_area_layout.setStretch(1, 1)
+
         filters_widget = QWidget()
-        filters_widget.setLayout(filters_layout)
-        filters_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-        filters_widget.setFixedWidth(filters_widget.sizeHint().width())
+        filters_widget.setLayout(filter_area_layout)
+        filters_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        filters_widget.setFixedWidth(filter_top_widget.sizeHint().width())
 
         central = QWidget()
         main_layout = QHBoxLayout(central)
@@ -230,6 +248,36 @@ class StatsWindow(QMainWindow):
         return []
 
     # ------------------------------------------------------------------
+    def _get_image_path(self, product: str, card_name: str) -> Path:
+        """Return the image file path for the given product/card."""
+        safe_prod = re.sub(r"[\\/:*?\"<>|]", "_", product)
+        safe_card = re.sub(r"[\\/:*?\"<>|]", "_", card_name)
+        base = Path(self.db_path).parent
+        return base / "picture" / safe_prod / f"{safe_card}.jpg"
+
+    # ------------------------------------------------------------------
+    def _on_pick(self, event) -> None:
+        line = getattr(event, "artist", None)
+        if line is None:
+            return
+        card_name = getattr(line, "get_label", lambda: "")()
+        if not card_name:
+            return
+        df = self.df[self.df["card"] == card_name]
+        if df.empty:
+            self.image_label.setText("No image")
+            self.image_label.setPixmap(QPixmap())
+            return
+        product = str(df.iloc[0]["product"])
+        img_path = self._get_image_path(product, card_name)
+        if img_path.is_file():
+            self.image_label.setPixmap(QPixmap(str(img_path)))
+            self.image_label.setText("")
+        else:
+            self.image_label.setPixmap(QPixmap())
+            self.image_label.setText("No image")
+
+    # ------------------------------------------------------------------
     def update_plot(self) -> None:
         """Filter ``self.df`` based on UI selections and update the chart."""
         if self.df.empty:
@@ -268,7 +316,13 @@ class StatsWindow(QMainWindow):
         grouped = df.groupby(["card", "scraped_at"])["price"].mean().reset_index()
         line_count = 0
         for card_name, data in grouped.groupby("card"):
-            self.ax.plot(data["scraped_at"], data["price"], marker="o", label=card_name)
+            line = self.ax.plot(
+                data["scraped_at"],
+                data["price"],
+                marker="o",
+                label=card_name,
+            )[0]
+            line.set_picker(True)
             line_count += 1
 
         if line_count <= 10:
