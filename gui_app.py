@@ -260,7 +260,7 @@ class StatsWindow(QMainWindow):
         line = getattr(event, "artist", None)
         if line is None:
             return
-        card_name = getattr(line, "get_label", lambda: "")()
+        card_name = getattr(line, "card_name", "")
         if not card_name:
             return
         df = self.df[self.df["card"] == card_name]
@@ -314,15 +314,25 @@ class StatsWindow(QMainWindow):
             return
 
         grouped = df.groupby(["card", "scraped_at"])["price"].mean().reset_index()
+        meta = (
+            df[["card", "rarity", "number"]]
+            .drop_duplicates()
+            .set_index("card")
+        )
+
         line_count = 0
         for card_name, data in grouped.groupby("card"):
+            rarity = meta.loc[card_name, "rarity"] if card_name in meta.index else ""
+            number = meta.loc[card_name, "number"] if card_name in meta.index else ""
+            label = f"{rarity} {number}".strip()
             line = self.ax.plot(
                 data["scraped_at"],
                 data["price"],
                 marker="o",
-                label=card_name,
+                label=label,
             )[0]
             line.set_picker(True)
+            line.card_name = card_name
             line_count += 1
 
         if line_count <= 10:
