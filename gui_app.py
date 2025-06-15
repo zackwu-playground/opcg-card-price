@@ -45,6 +45,7 @@ from PyQt5.QtWidgets import (
     QSpinBox,
     QDateEdit,
     QPushButton,
+    QSizePolicy,
 )
 from PyQt5 import QtCore
 from PyQt5.QtCore import QDate
@@ -72,8 +73,9 @@ class StatsWindow(QMainWindow):
 
         # Filter widgets -------------------------------------------------
         self.product_list = self._create_list_widget(min_width=120)
+        self.product_list.setFixedHeight(self.height() // 2)
+        self.product_list.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.rarity_list = self._create_combo_box()
-        self.color_list = self._create_combo_box()
         self.number_edit = QLineEdit()
         self.number_edit.setMinimumWidth(150)
 
@@ -91,34 +93,53 @@ class StatsWindow(QMainWindow):
         self.refresh_btn.clicked.connect(self.load_data)
         self.plot_btn.clicked.connect(self.update_plot)
 
-        filter_row1 = QHBoxLayout()
-        filter_row1.addWidget(QLabel("Product"))
-        filter_row1.addWidget(self.product_list)
-        filter_row1.addWidget(QLabel("Rarity"))
-        filter_row1.addWidget(self.rarity_list)
+        # Left side - product filter
+        left_layout = QVBoxLayout()
+        left_layout.addWidget(QLabel("Product"))
+        left_layout.addWidget(self.product_list)
 
-        filter_row2 = QHBoxLayout()
-        filter_row2.addWidget(QLabel("Number"))
-        filter_row2.addWidget(self.number_edit)
-        filter_row2.addWidget(QLabel("Color"))
-        filter_row2.addWidget(self.color_list)
+        # Right side - other filters
+        num_row = QHBoxLayout()
+        self._add_labeled(num_row, "Number", self.number_edit)
 
-        filter_row3 = QHBoxLayout()
-        self._add_labeled(filter_row3, "Min price", self.min_price)
-        self._add_labeled(filter_row3, "Max price", self.max_price)
-        self._add_labeled(filter_row3, "Start", self.start_date)
-        self._add_labeled(filter_row3, "End", self.end_date)
-        filter_row3.addWidget(self.refresh_btn)
-        filter_row3.addWidget(self.plot_btn)
+        date_row = QHBoxLayout()
+        self._add_labeled(date_row, "Start", self.start_date)
+        self._add_labeled(date_row, "End", self.end_date)
+
+        price_row = QHBoxLayout()
+        self._add_labeled(price_row, "Min price", self.min_price)
+        self._add_labeled(price_row, "Max price", self.max_price)
+
+        rarity_row = QHBoxLayout()
+        rarity_row.addWidget(QLabel("Rarity"))
+        rarity_row.addWidget(self.rarity_list)
+
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(self.refresh_btn)
+        btn_row.addWidget(self.plot_btn)
+
+        right_layout = QVBoxLayout()
+        right_layout.addLayout(num_row)
+        right_layout.addLayout(date_row)
+        right_layout.addLayout(price_row)
+        right_layout.addLayout(rarity_row)
+        right_layout.addLayout(btn_row)
+
+        filters_layout = QHBoxLayout()
+        filters_layout.addLayout(left_layout)
+        filters_layout.addLayout(right_layout)
+
+        filters_widget = QWidget()
+        filters_widget.setLayout(filters_layout)
+        filters_widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        filters_widget.setFixedWidth(filters_widget.sizeHint().width())
 
         central = QWidget()
         main_layout = QHBoxLayout(central)
-        filters_layout = QVBoxLayout()
-        filters_layout.addLayout(filter_row1)
-        filters_layout.addLayout(filter_row2)
-        filters_layout.addLayout(filter_row3)
-        main_layout.addLayout(filters_layout)
+        main_layout.addWidget(filters_widget)
         main_layout.addWidget(self.canvas)
+        main_layout.setStretch(0, 0)
+        main_layout.setStretch(1, 1)
         self.setCentralWidget(central)
 
         self.df: pd.DataFrame = pd.DataFrame()
