@@ -10,6 +10,7 @@ allowed for the categorical filters.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
@@ -194,5 +195,12 @@ def launch_gui(db_path: str) -> None:
     app.exec_()
 
 
-if __name__ == "__main__":  # pragma: no cover - manual launch
-    launch_gui("scraped_data.db")
+def main() -> None:  # pragma: no cover - manual launch
+    """Launch the GUI with optional DB path from command line."""
+    db_path = sys.argv[1] if len(sys.argv) > 1 else "scraped_data.db"
+    Path(db_path).touch(exist_ok=True)
+    launch_gui(db_path)
+
+
+if __name__ == "__main__":
+    main()
