@@ -166,6 +166,9 @@ class Scraper:
         for card_list in card_lists:
             rarity_elem = card_list.find(class_="py-2")
             rarity = rarity_elem.get_text(strip=True) if rarity_elem else ""
+            # Skip common/uncommon cards
+            if rarity.strip().upper() in {"C", "U", "UC"}:
+                continue
             for row in card_list.select("div.row"):
                 for col in row.select("div.col-md"):
                     link = col.find("a", href=True)
