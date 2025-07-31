@@ -19,12 +19,8 @@ from models import Product, Card
 import requests
 from bs4 import BeautifulSoup, Tag
 
-try:  # Optional dependency
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
-except Exception:  # pragma: no cover - optional dependency
-    webdriver = None  # type: ignore
-    Options = None  # type: ignore
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 __all__ = ["Scraper"]
 
@@ -33,7 +29,7 @@ class Scraper:
     """負責下載 HTML 與解析指定元素。"""
 
     def __init__(
-        self, url: str, timeout: int = 10, max_workers: int = 5, use_selenium: bool = False
+        self, url: str, timeout: int = 10, max_workers: int = 5, use_selenium: bool = True
     ) -> None:
         self.url = url
         self.timeout = timeout
