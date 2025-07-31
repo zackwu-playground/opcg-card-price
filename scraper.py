@@ -19,16 +19,26 @@ from models import Product, Card
 import requests
 from bs4 import BeautifulSoup, Tag
 
+try:  # Optional dependency
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+except Exception:  # pragma: no cover - optional dependency
+    webdriver = None  # type: ignore
+    Options = None  # type: ignore
+
 __all__ = ["Scraper"]
 
 
 class Scraper:
     """負責下載 HTML 與解析指定元素。"""
 
-    def __init__(self, url: str, timeout: int = 10, max_workers: int = 5) -> None:
+    def __init__(
+        self, url: str, timeout: int = 10, max_workers: int = 5, use_selenium: bool = False
+    ) -> None:
         self.url = url
         self.timeout = timeout
         self.max_workers = max_workers
+        self.use_selenium = use_selenium
         # 改用 Session 可重複利用 TCP 連線並設定通用 headers
         self.session: requests.Session = requests.Session()
         self.session.headers.update(
@@ -40,6 +50,17 @@ class Scraper:
                 )
             }
         )
+        self.driver = None
+        if self.use_selenium and webdriver is not None:
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            try:
+                self.driver = webdriver.Chrome(options=chrome_options)
+                self.driver.implicitly_wait(self.timeout)
+            except Exception:
+                self.driver = None
 
     # ---------------------------------------------------------------------
     # Public API
@@ -54,12 +75,18 @@ class Scraper:
     # ------------------------------------------------------------------
     def fetch(self) -> str:
         """下載目標頁面 HTML。"""
+        if self.use_selenium and self.driver is not None:
+            self.driver.get(self.url)
+            return self.driver.page_source
         resp = self.session.get(self.url, timeout=self.timeout)
         resp.raise_for_status()  # 若非 2xx 會拋出 HTTPError
         return resp.text
 
     def fetch_page(self, url: str) -> str:
         """下載指定產品頁面 HTML。"""
+        if self.use_selenium and self.driver is not None:
+            self.driver.get(url)
+            return self.driver.page_source
         resp = self.session.get(url, timeout=self.timeout)
         resp.raise_for_status()
         return resp.text
@@ -248,10 +275,17 @@ class Scraper:
             results.append(product)
         return results
 
+    def __del__(self) -> None:  # pragma: no cover - cleanup
+        if self.driver is not None:
+            try:
+                self.driver.quit()
+            except Exception:
+                pass
+
 
 if __name__ == "__main__":  # Quick manual test
     import json
 
-    scraper = Scraper("https://yuyu-tei.jp/top/opc")
+    scraper = Scraper("https://yuyu-tei.jp/top/opc", use_selenium=True)
     data = scraper.run()
     print(json.dumps([p.__dict__ for p in data], ensure_ascii=False, indent=2))
