@@ -16,11 +16,15 @@ from datetime import date
 
 from models import Product, Card
 
+import time
 import requests
 from bs4 import BeautifulSoup, Tag
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException
 
 __all__ = ["Scraper"]
 
@@ -46,6 +50,18 @@ class Scraper:
                 )
             }
         )
+        # 自動重試與退避，避免因暫時性錯誤導致抓取失敗
+        retry = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=("GET",),
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        # 控制請求頻率以避免 QUOTA exceeded
+        self.request_interval = 1.0
         self.driver = None
         if self.use_selenium and webdriver is not None:
             chrome_options = Options()
@@ -55,6 +71,7 @@ class Scraper:
             try:
                 self.driver = webdriver.Chrome(options=chrome_options)
                 self.driver.implicitly_wait(self.timeout)
+                self.driver.set_page_load_timeout(self.timeout)
             except Exception:
                 self.driver = None
 
@@ -72,8 +89,12 @@ class Scraper:
     def fetch(self) -> str:
         """下載目標頁面 HTML。"""
         if self.use_selenium and self.driver is not None:
-            self.driver.get(self.url)
+            try:
+                self.driver.get(self.url)
+            except TimeoutException:
+                pass
             return self.driver.page_source
+        time.sleep(self.request_interval)
         resp = self.session.get(self.url, timeout=self.timeout)
         resp.raise_for_status()  # 若非 2xx 會拋出 HTTPError
         return resp.text
@@ -81,8 +102,12 @@ class Scraper:
     def fetch_page(self, url: str) -> str:
         """下載指定產品頁面 HTML。"""
         if self.use_selenium and self.driver is not None:
-            self.driver.get(url)
+            try:
+                self.driver.get(url)
+            except TimeoutException:
+                pass
             return self.driver.page_source
+        time.sleep(self.request_interval)
         resp = self.session.get(url, timeout=self.timeout)
         resp.raise_for_status()
         return resp.text
