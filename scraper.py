@@ -9,14 +9,16 @@
 """
 from __future__ import annotations
 
+import logging
 import re
+import threading
+import time
 from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 
 from models import Product, Card
 
-import time
 import requests
 from bs4 import BeautifulSoup, Tag
 from requests.adapters import HTTPAdapter
@@ -28,12 +30,14 @@ from selenium.common.exceptions import TimeoutException
 
 __all__ = ["Scraper"]
 
+logger = logging.getLogger(__name__)
+
 
 class Scraper:
     """負責下載 HTML 與解析指定元素。"""
 
     def __init__(
-        self, url: str, timeout: int = 10, max_workers: int = 5, use_selenium: bool = True
+        self, url: str, timeout: int = 30, max_workers: int = 5, use_selenium: bool = True
     ) -> None:
         self.url = url
         self.timeout = timeout
@@ -62,6 +66,10 @@ class Scraper:
         self.session.mount("https://", adapter)
         # 控制請求頻率以避免 QUOTA exceeded
         self.request_interval = 1.0
+        # 全域 rate limiter（跨執行緒安全）
+        self._rate_lock = threading.Lock()
+        self._last_request_time: float = 0.0
+
         self.driver = None
         if self.use_selenium and webdriver is not None:
             chrome_options = Options()
@@ -72,12 +80,25 @@ class Scraper:
                 self.driver = webdriver.Chrome(options=chrome_options)
                 self.driver.implicitly_wait(self.timeout)
                 self.driver.set_page_load_timeout(self.timeout)
-            except Exception:
+            except Exception as exc:
+                logger.warning("ChromeDriver 啟動失敗，將使用 requests 替代: %s", exc)
                 self.driver = None
 
-    # ---------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Rate limiter
+    # ------------------------------------------------------------------
+    def _rate_limit(self) -> None:
+        """確保跨執行緒請求間隔 >= request_interval。"""
+        with self._rate_lock:
+            now = time.monotonic()
+            elapsed = now - self._last_request_time
+            if elapsed < self.request_interval:
+                time.sleep(self.request_interval - elapsed)
+            self._last_request_time = time.monotonic()
+
+    # ------------------------------------------------------------------
     # Public API
-    # ---------------------------------------------------------------------
+    # ------------------------------------------------------------------
     def run(self) -> List[Product]:
         """一次完成 *下載 ➜ 解析* 並返回結果。"""
         html = self.fetch()
@@ -87,27 +108,44 @@ class Scraper:
     # Internal helpers
     # ------------------------------------------------------------------
     def fetch(self) -> str:
-        """下載目標頁面 HTML。"""
+        """下載目標頁面 HTML（使用 Selenium）。"""
         if self.use_selenium and self.driver is not None:
             try:
                 self.driver.get(self.url)
             except TimeoutException:
-                pass
-            return self.driver.page_source
-        time.sleep(self.request_interval)
+                logger.warning("fetch() TimeoutException: %s", self.url)
+            html = self.driver.page_source
+            if len(html) < 500:
+                raise RuntimeError(
+                    f"fetch() 取得的頁面過短 ({len(html)} chars)，可能載入失敗: {self.url}"
+                )
+            return html
+        self._rate_limit()
         resp = self.session.get(self.url, timeout=self.timeout)
-        resp.raise_for_status()  # 若非 2xx 會拋出 HTTPError
+        resp.raise_for_status()
         return resp.text
 
     def fetch_page(self, url: str) -> str:
-        """下載指定產品頁面 HTML。"""
+        """下載指定產品頁面 HTML（使用 Selenium，僅主流程呼叫）。"""
         if self.use_selenium and self.driver is not None:
             try:
                 self.driver.get(url)
             except TimeoutException:
-                pass
-            return self.driver.page_source
-        time.sleep(self.request_interval)
+                logger.warning("fetch_page() TimeoutException: %s", url)
+            html = self.driver.page_source
+            if len(html) < 500:
+                raise RuntimeError(
+                    f"fetch_page() 取得的頁面過短 ({len(html)} chars)，可能載入失敗: {url}"
+                )
+            return html
+        self._rate_limit()
+        resp = self.session.get(url, timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.text
+
+    def _fetch_page_requests(self, url: str) -> str:
+        """使用 requests.Session 下載頁面（thread-safe，供多執行緒 worker 使用）。"""
+        self._rate_limit()
         resp = self.session.get(url, timeout=self.timeout)
         resp.raise_for_status()
         return resp.text
@@ -137,10 +175,12 @@ class Scraper:
                         != "https://img.yuyu-tei.jp/card_image/noimage_front.jpg"
                     ):
                         try:
+                            self._rate_limit()
                             resp = self.session.get(img_url, timeout=self.timeout)
                             resp.raise_for_status()
                             img_bytes = resp.content
-                        except requests.RequestException:
+                        except requests.RequestException as exc:
+                            logger.warning("圖片下載失敗 %s: %s", img_url, exc)
                             img_bytes = b""
 
             info_col = container.find(class_="col-lg-7")
@@ -232,7 +272,8 @@ class Scraper:
         def worker(entry: tuple[str, str, str]) -> Card | None:
             card_url, card_name, rarity = entry
             try:
-                card_html = self.fetch_page(card_url)
+                # 使用 requests（thread-safe），不使用 Selenium
+                card_html = self._fetch_page_requests(card_url)
                 card = self.parse_card_page(card_html)
                 if not card.number:
                     return None
@@ -240,7 +281,8 @@ class Scraper:
                 card.url = card_url
                 card.name = card_name
                 return card
-            except requests.RequestException:
+            except requests.RequestException as exc:
+                logger.warning("卡片頁面下載失敗 %s: %s", card_url, exc)
                 return None
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -249,9 +291,9 @@ class Scraper:
                 card = f.result()
                 if card:
                     cards.append(card)
-                print(
-                    f"[parse_product_page] {idx}/{total} {card.name if card else ''}",
-                    flush=True,
+                logger.info(
+                    "[parse_product_page] %d/%d %s",
+                    idx, total, card.name if card else "(skip)",
                 )
 
         return cards
@@ -283,7 +325,7 @@ class Scraper:
             if not m:
                 continue
 
-            print(f"[parse] {idx}/{total} {btn.get_text(strip=True)}", flush=True)
+            logger.info("[parse] %d/%d %s", idx, total, btn.get_text(strip=True))
             product = Product(
                 name=btn.get_text(strip=True),
                 url=m.group(1),
@@ -291,8 +333,15 @@ class Scraper:
             try:
                 product_html = self.fetch_page(product.url)
                 product.cards = self.parse_product_page(product_html)
-            except requests.RequestException:
+            except (requests.RequestException, RuntimeError) as exc:
+                logger.warning("產品頁面下載失敗 %s: %s", product.url, exc)
                 product.cards = []
+
+            # 跳過沒有卡片的產品
+            if not product.cards:
+                logger.info("[parse] 跳過空產品: %s", product.name)
+                continue
+
             results.append(product)
         return results
 
@@ -307,6 +356,10 @@ class Scraper:
 if __name__ == "__main__":  # Quick manual test
     import json
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
     scraper = Scraper("https://yuyu-tei.jp/top/opc", use_selenium=True)
     data = scraper.run()
     print(json.dumps([p.__dict__ for p in data], ensure_ascii=False, indent=2))

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(git -C \"F:\\\\Github\\\\opcg-card-price\" log --oneline -15)",
+      "Bash(git -C \"F:\\\\Github\\\\opcg-card-price\" remote -v)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\ntest: 新增 scraper / db_manager / main 單元測試（30 項）\n\n涵蓋初始化、rate limiter、fetch 路徑（requests 與 Selenium）、\nHTML 解析、DB 唯一鍵/靜態欄位更新/圖片覆寫、job 防禦性過濾等場景。\n所有網路請求皆 mock，DB 測試使用 tmp_path 暫存 SQLite。\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)"
+    ]
+  }
+}

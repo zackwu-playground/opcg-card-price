@@ -55,7 +55,7 @@ class CardTable(Base):
 
     __tablename__ = "card"
     __table_args__ = (
-        UniqueConstraint("product_id", "name", name="uix_product_card_name"),
+        UniqueConstraint("product_id", "name", "number", name="uix_product_card_name_number"),
     )
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
@@ -125,25 +125,21 @@ class DatabaseManager:
                 for card in product.cards:
                     card_obj = (
                         session.query(CardTable)
-                        .filter_by(product_id=prod_obj.id, name=card.name)
+                        .filter_by(product_id=prod_obj.id, name=card.name, number=card.number)
                         .one_or_none()
                     )
-                    if card_obj is None:
-                        rarity_obj = (
-                            session.query(RarityTable)
-                            .filter_by(name=card.rarity)
-                            .one_or_none()
-                        )
-                        if rarity_obj is None:
-                            rarity_obj = RarityTable(name=card.rarity)
-                            session.add(rarity_obj)
-                            session.flush()
-                        if card.image:
-                            safe_card = re.sub(r"[\\/:*?\"<>|]", "_", card.name)
-                            file_path = prod_dir / f"{safe_card}.jpg"
-                            if not file_path.exists():
-                                file_path.write_bytes(card.image)
 
+                    rarity_obj = (
+                        session.query(RarityTable)
+                        .filter_by(name=card.rarity)
+                        .one_or_none()
+                    )
+                    if rarity_obj is None:
+                        rarity_obj = RarityTable(name=card.rarity)
+                        session.add(rarity_obj)
+                        session.flush()
+
+                    if card_obj is None:
                         card_obj = CardTable(
                             product_id=prod_obj.id,
                             name=card.name,
@@ -155,6 +151,18 @@ class DatabaseManager:
                         )
                         session.add(card_obj)
                         session.flush()
+                    else:
+                        # 更新既有 card 的靜態欄位
+                        card_obj.url = card.url
+                        card_obj.feature = card.feature
+                        card_obj.color = card.color
+                        card_obj.rarity_id = rarity_obj.id
+
+                    # 圖片：有新的非空圖片時覆寫舊檔
+                    if card.image:
+                        safe_card = re.sub(r"[\\/:*?\"<>|]", "_", card.name)
+                        file_path = prod_dir / f"{safe_card}.jpg"
+                        file_path.write_bytes(card.image)
 
                     # Skip insertion when a price for this card was already
                     # recorded on the same date.

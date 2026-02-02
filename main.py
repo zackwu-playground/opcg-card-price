@@ -8,11 +8,14 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 from typing import Callable
 
 from scraper import Scraper
 from db_manager import DatabaseManager
+
+logger = logging.getLogger(__name__)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -29,17 +32,26 @@ def create_job(url: str, db_path: str) -> Callable[[], None]:
         scr = Scraper(url)
         html = scr.fetch()
         data = scr.parse(html)
+
+        # 防禦性過濾：排除沒有卡片的產品
+        data = [p for p in data if p.cards]
+
         if data:
             db = DatabaseManager(db_path)
             db.insert_products(data)
-            print(f"[✓] {len(data)} records inserted.")
+            logger.info("[job] %d 筆產品已寫入資料庫。", len(data))
         else:
-            print("[!] No data scraped – check selectors?")
+            logger.warning("[job] 未爬取到任何資料，請檢查選擇器或網站狀態。")
 
     return job
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
     args = build_arg_parser().parse_args()
 
     # 先確認 DB 檔存在與否，不存在會自動建立
@@ -47,7 +59,7 @@ def main():
 
     # 直接執行一次 --------------------------------------------------------
     create_job(args.url, args.db)()
-    print("[✓] Scraping completed.")
+    logger.info("[main] 爬蟲作業完成。")
 
 
 if __name__ == "__main__":
