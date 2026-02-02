@@ -8,7 +8,7 @@ set TASK_NAME=OPCG_Daily_Scrape
 set SCRIPT_DIR=%~dp0
 set PYTHON_EXE=python
 set URL=https://yuyu-tei.jp/top/opc
-set DB_PATH=%SCRIPT_DIR%scraped_data.db
+set DB_PATH=F:\OPTCG\scraped_data.db
 
 REM 刪除舊的同名排程（若存在）
 schtasks /Delete /TN "%TASK_NAME%" /F >nul 2>&1
