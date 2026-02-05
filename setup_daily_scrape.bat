@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 REM ============================================================
 REM  建立 Windows 排程工作：每天 20:00 執行爬蟲
 REM  使用方式：以系統管理員身份執行此 bat 檔
@@ -6,9 +7,12 @@ REM ============================================================
 
 set TASK_NAME=OPCG_Daily_Scrape
 set SCRIPT_DIR=%~dp0
-set PYTHON_EXE=python
+set PYTHON_EXE=%SCRIPT_DIR%venv\Scripts\python.exe
 set URL=https://yuyu-tei.jp/top/opc
 set DB_PATH=F:\OPTCG\scraped_data.db
+
+REM 確保 DB 目錄存在
+if not exist "F:\OPTCG\" mkdir "F:\OPTCG"
 
 REM 刪除舊的同名排程（若存在）
 schtasks /Delete /TN "%TASK_NAME%" /F >nul 2>&1

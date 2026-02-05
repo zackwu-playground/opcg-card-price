@@ -110,13 +110,16 @@ class DatabaseManager:
             for product in products:
                 prod_obj = (
                     session.query(ProductTable)
-                    .filter_by(name=product.name, url=product.url)
+                    .filter_by(name=product.name)
                     .one_or_none()
                 )
                 if prod_obj is None:
                     prod_obj = ProductTable(name=product.name, url=product.url)
                     session.add(prod_obj)
                     session.flush()
+                elif prod_obj.url != product.url:
+                    # URL 變動時更新
+                    prod_obj.url = product.url
 
                 safe_prod = re.sub(r"[\\/:*?\"<>|]", "_", product.name)
                 prod_dir = self.picture_dir / safe_prod

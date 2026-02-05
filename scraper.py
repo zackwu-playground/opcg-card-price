@@ -37,7 +37,7 @@ class Scraper:
     """負責下載 HTML 與解析指定元素。"""
 
     def __init__(
-        self, url: str, timeout: int = 30, max_workers: int = 5, use_selenium: bool = True
+        self, url: str, timeout: int = 30, max_workers: int = 10, use_selenium: bool = True
     ) -> None:
         self.url = url
         self.timeout = timeout
@@ -65,7 +65,7 @@ class Scraper:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
         # 控制請求頻率以避免 QUOTA exceeded
-        self.request_interval = 1.0
+        self.request_interval = 0.5
         # 全域 rate limiter（跨執行緒安全）
         self._rate_lock = threading.Lock()
         self._last_request_time: float = 0.0
@@ -311,10 +311,12 @@ class Scraper:
         # Precollect product buttons so progress can be shown
         buttons: List[Tag] = []
         for div in accordion_divs:
-            for btn in div.select(
-                "div#side-sell-single h2.accordion-header > button[onclick]"
-            ):
-                if btn.find_parent(id="side-sell-target-11"):
+            for btn in div.select("h2.accordion-header > button[onclick]"):
+                # 排除特殊分類（如：損傷品、特價品、福袋等）
+                btn_id = btn.get("id", "")
+                if btn_id.startswith("toggle-sell-target-"):
+                    continue
+                if btn_id in ("toggle-sell-opc-s-damage", "toggle-sell-opc-s-sale", "toggle-sell-opc-m-bag"):
                     continue
                 buttons.append(btn)
 
