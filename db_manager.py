@@ -162,9 +162,11 @@ class DatabaseManager:
                         card_obj.rarity_id = rarity_obj.id
 
                     # 圖片：有新的非空圖片時覆寫舊檔
+                    # 檔名使用 number_name 以避免同名卡片互相覆蓋
                     if card.image:
+                        safe_number = re.sub(r"[\\/:*?\"<>|]", "_", card.number)
                         safe_card = re.sub(r"[\\/:*?\"<>|]", "_", card.name)
-                        file_path = prod_dir / f"{safe_card}.jpg"
+                        file_path = prod_dir / f"{safe_number}_{safe_card}.jpg"
                         file_path.write_bytes(card.image)
 
                     # Skip insertion when a price for this card was already
@@ -184,6 +186,23 @@ class DatabaseManager:
                             )
                         )
             session.commit()
+
+    def get_existing_images(self, product_name: str) -> set[str]:
+        """取得指定產品已存在的圖片 key 集合。
+
+        Args:
+            product_name: 產品名稱
+
+        Returns:
+            set of "{number}_{name}" keys (不含 .jpg 副檔名)
+        """
+        safe_prod = re.sub(r"[\\/:*?\"<>|]", "_", product_name)
+        prod_dir = self.picture_dir / safe_prod
+        if not prod_dir.exists():
+            return set()
+
+        # 從檔名解析出 key (去掉 .jpg 副檔名)
+        return {f.stem for f in prod_dir.glob("*.jpg")}
 
     def fetch_dataframe(self):
         """Return card price history as a pandas DataFrame."""

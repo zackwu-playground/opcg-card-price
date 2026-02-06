@@ -194,35 +194,76 @@ CARD_PAGE_HTML = """
 class TestParseCardPage:
     def test_parse_card_page_full_html(self):
         s = _make_scraper()
-        s.request_interval = 0
-        # mock 圖片下載
-        mock_resp = MagicMock()
-        mock_resp.content = b"imgdata"
-        s.session.get = MagicMock(return_value=mock_resp)
 
-        card = s.parse_card_page(CARD_PAGE_HTML)
+        card, img_url = s.parse_card_page(CARD_PAGE_HTML)
         assert card.number == "OP01-001"
         assert card.price == 500
         assert card.quantity == 3
         assert card.feature == "速攻"
         assert card.color == "赤"
-        assert card.image == b"imgdata"
+        assert card.image == b""  # parse_card_page 不再下載圖片
+        assert img_url == "https://img.yuyu-tei.jp/card_image/opc/test.jpg"
 
     def test_parse_card_page_empty_container(self):
         s = _make_scraper()
-        card = s.parse_card_page("<html><body></body></html>")
+        card, img_url = s.parse_card_page("<html><body></body></html>")
         assert card.number == ""
         assert card.price == 0
         assert card.quantity == 0
+        assert img_url == ""
 
-    def test_parse_card_page_image_download_failure(self, caplog):
+    def test_parse_card_page_noimage_url_returns_empty(self):
+        """若圖片 URL 是 noimage，應回傳空字串。"""
+        s = _make_scraper()
+        html = """
+        <html><body>
+        <section class="product-detail" id="product-detail">
+          <div class="col-lg-5">
+            <img class="vimg" src="https://img.yuyu-tei.jp/card_image/noimage_front.jpg" />
+          </div>
+          <div class="col-lg-7">
+            <div class="d-flex"><span class="border">OP01-001</span></div>
+            <div class="d-flex">
+              <h4 class="fw-bold">100円</h4>
+              <label class="form-check-label">在庫 : 1 点</label>
+            </div>
+          </div>
+        </section>
+        </body></html>
+        """
+        card, img_url = s.parse_card_page(html)
+        assert card.number == "OP01-001"
+        assert img_url == ""
+
+
+# =====================================================================
+# 6b. download_image()
+# =====================================================================
+class TestDownloadImage:
+    def test_download_image_success(self):
+        s = _make_scraper()
+        s.request_interval = 0
+        mock_resp = MagicMock()
+        mock_resp.content = b"imgdata"
+        s.session.get = MagicMock(return_value=mock_resp)
+
+        result = s.download_image("https://example.com/img.jpg")
+        assert result == b"imgdata"
+        s.session.get.assert_called_once()
+
+    def test_download_image_empty_url_returns_empty(self):
+        s = _make_scraper()
+        result = s.download_image("")
+        assert result == b""
+
+    def test_download_image_failure_returns_empty(self, caplog):
         s = _make_scraper()
         s.request_interval = 0
         s.session.get = MagicMock(side_effect=requests.RequestException("fail"))
 
         with caplog.at_level(logging.WARNING, logger="scraper"):
-            card = s.parse_card_page(CARD_PAGE_HTML)
-        assert card.image == b""
+            result = s.download_image("https://example.com/img.jpg")
+        assert result == b""
         assert "圖片下載失敗" in caplog.text
 
 
@@ -261,14 +302,9 @@ class TestParseProductPage:
         s.request_interval = 0
 
         # mock _fetch_page_requests 回傳 card HTML
-        def fake_fetch(url):
-            return CARD_PAGE_HTML
-
-        s._fetch_page_requests = MagicMock(side_effect=fake_fetch)
-        # mock session.get 以處理圖片下載
-        mock_resp = MagicMock()
-        mock_resp.content = b"img"
-        s.session.get = MagicMock(return_value=mock_resp)
+        s._fetch_page_requests = MagicMock(return_value=CARD_PAGE_HTML)
+        # mock download_image
+        s.download_image = MagicMock(return_value=b"img")
 
         cards = s.parse_product_page(PRODUCT_PAGE_HTML_WITH_CU)
         # C 和 UC 被跳過，只有 SR 的 1 張卡
@@ -282,9 +318,7 @@ class TestParseProductPage:
         s.request_interval = 0
 
         s._fetch_page_requests = MagicMock(return_value=CARD_PAGE_HTML)
-        mock_resp = MagicMock()
-        mock_resp.content = b"img"
-        s.session.get = MagicMock(return_value=mock_resp)
+        s.download_image = MagicMock(return_value=b"img")
 
         # 建立一個簡單的 product HTML，有 1 張 SR 卡
         html = """
@@ -301,6 +335,63 @@ class TestParseProductPage:
         """
         cards = s.parse_product_page(html)
         s._fetch_page_requests.assert_called_once()
+
+    def test_parse_product_page_skips_existing_images(self):
+        """測試已存在的圖片會被跳過不下載。"""
+        s = _make_scraper()
+        s.request_interval = 0
+
+        s._fetch_page_requests = MagicMock(return_value=CARD_PAGE_HTML)
+        s.download_image = MagicMock(return_value=b"img")
+
+        html = """
+        <html><body>
+        <div class="col-12 mb-5 pb-5">
+          <div id="card-list3" class="py-4">
+            <div class="py-2">SR</div>
+            <div class="row"><div class="col-md">
+              <a href="https://example.com/sr1"><span class="text-primary">SR Card</span></a>
+            </div></div>
+          </div>
+        </div>
+        </body></html>
+        """
+        # 傳入已存在的圖片 key (number_name)
+        existing = {"OP01-001_SR Card"}
+        cards = s.parse_product_page(html, existing_images=existing)
+
+        assert len(cards) == 1
+        # 圖片應該被跳過，download_image 不該被呼叫
+        s.download_image.assert_not_called()
+        assert cards[0].image == b""
+
+    def test_parse_product_page_downloads_new_images(self):
+        """測試新圖片會被下載。"""
+        s = _make_scraper()
+        s.request_interval = 0
+
+        s._fetch_page_requests = MagicMock(return_value=CARD_PAGE_HTML)
+        s.download_image = MagicMock(return_value=b"new_img")
+
+        html = """
+        <html><body>
+        <div class="col-12 mb-5 pb-5">
+          <div id="card-list3" class="py-4">
+            <div class="py-2">SR</div>
+            <div class="row"><div class="col-md">
+              <a href="https://example.com/sr1"><span class="text-primary">SR Card</span></a>
+            </div></div>
+          </div>
+        </div>
+        </body></html>
+        """
+        # 傳入其他圖片 key，所以這張卡的圖片不存在
+        existing = {"OP01-002_OtherCard"}
+        cards = s.parse_product_page(html, existing_images=existing)
+
+        assert len(cards) == 1
+        s.download_image.assert_called_once()
+        assert cards[0].image == b"new_img"
 
     def test_parse_product_page_worker_failure_returns_none(self, caplog):
         s = _make_scraper()
@@ -356,7 +447,7 @@ class TestParse:
         # 第一個產品有卡片，第二個回傳空 list
         call_count = [0]
 
-        def mock_parse_product(h):
+        def mock_parse_product(h, existing_images=None):
             call_count[0] += 1
             if call_count[0] == 1:
                 return [

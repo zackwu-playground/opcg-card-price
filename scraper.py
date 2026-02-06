@@ -13,7 +13,7 @@ import logging
 import re
 import threading
 import time
-from typing import List
+from typing import Callable, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 
@@ -150,11 +150,17 @@ class Scraper:
         resp.raise_for_status()
         return resp.text
 
-    def parse_card_page(self, html: str) -> Card:
-        """解析單一卡片頁面以取得詳細資訊 (不含卡片名稱)。"""
+    def parse_card_page(self, html: str) -> tuple[Card, str]:
+        """解析單一卡片頁面以取得詳細資訊 (不含卡片名稱)。
+
+        圖片不在此下載，由呼叫端決定是否下載。
+
+        Returns:
+            tuple of (Card, img_url)，Card.image 為空 bytes
+        """
         soup = BeautifulSoup(html, "html.parser")
 
-        img_bytes = b""
+        img_url = ""
         number = ""
         price = 0
         quantity = 0
@@ -168,20 +174,13 @@ class Scraper:
             if img_col:
                 img_elem = img_col.find("img", class_="vimg", src=True)
                 if img_elem:
-                    img_url = img_elem["src"]
+                    src = img_elem["src"]
                     if (
-                        img_url.endswith(".jpg")
-                        and img_url
+                        src.endswith(".jpg")
+                        and src
                         != "https://img.yuyu-tei.jp/card_image/noimage_front.jpg"
                     ):
-                        try:
-                            self._rate_limit()
-                            resp = self.session.get(img_url, timeout=self.timeout)
-                            resp.raise_for_status()
-                            img_bytes = resp.content
-                        except requests.RequestException as exc:
-                            logger.warning("圖片下載失敗 %s: %s", img_url, exc)
-                            img_bytes = b""
+                        img_url = src
 
             info_col = container.find(class_="col-lg-7")
             if info_col:
@@ -222,11 +221,11 @@ class Scraper:
                                 quantity = 0
 
 
-        return Card(
+        card = Card(
             name="",
             rarity="",
             url="",
-            image=img_bytes,
+            image=b"",
             number=number,
             price=price,
             quantity=quantity,
@@ -234,9 +233,39 @@ class Scraper:
             feature=feature,
             color=color,
         )
+        return card, img_url
 
-    def parse_product_page(self, html: str) -> List[Card]:
-        """解析產品頁面以取得卡片清單，依稀有度排序。"""
+    def download_image(self, img_url: str) -> bytes:
+        """下載圖片並回傳 bytes。
+
+        Args:
+            img_url: 圖片完整 URL
+
+        Returns:
+            圖片內容 bytes，若下載失敗則回傳空 bytes
+        """
+        if not img_url:
+            return b""
+        try:
+            self._rate_limit()
+            resp = self.session.get(img_url, timeout=self.timeout)
+            resp.raise_for_status()
+            return resp.content
+        except requests.RequestException as exc:
+            logger.warning("圖片下載失敗 %s: %s", img_url, exc)
+            return b""
+
+    def parse_product_page(
+        self, html: str, existing_images: set[str] | None = None
+    ) -> List[Card]:
+        """解析產品頁面以取得卡片清單，依稀有度排序。
+
+        Args:
+            html: 產品頁面 HTML
+            existing_images: 已存在的圖片 key 集合 ("{number}_{name}")，
+                            若圖片已存在則跳過下載
+        """
+        existing_images = existing_images or set()
         soup = BeautifulSoup(html, "html.parser")
 
         # ▸ 主要卡片列表區塊
@@ -274,9 +303,21 @@ class Scraper:
             try:
                 # 使用 requests（thread-safe），不使用 Selenium
                 card_html = self._fetch_page_requests(card_url)
-                card = self.parse_card_page(card_html)
+                card, img_url = self.parse_card_page(card_html)
                 if not card.number:
                     return None
+
+                # 檢查圖片是否需要下載
+                safe_number = re.sub(r"[\\/:*?\"<>|]", "_", card.number)
+                safe_name = re.sub(r"[\\/:*?\"<>|]", "_", card_name)
+                image_key = f"{safe_number}_{safe_name}"
+
+                if image_key not in existing_images:
+                    card.image = self.download_image(img_url)
+                    logger.debug("下載圖片: %s", image_key)
+                else:
+                    logger.debug("跳過已存在圖片: %s", image_key)
+
                 card.rarity = rarity
                 card.url = card_url
                 card.name = card_name
@@ -298,8 +339,17 @@ class Scraper:
 
         return cards
 
-    def parse(self, html: str) -> List[Product]:
-        """解析 HTML 取得 button 文字與網址並組成 ``Product`` 物件。"""
+    def parse(
+        self,
+        html: str,
+        get_existing_images: "Callable[[str], set[str]] | None" = None,
+    ) -> List[Product]:
+        """解析 HTML 取得 button 文字與網址並組成 ``Product`` 物件。
+
+        Args:
+            html: 首頁 HTML
+            get_existing_images: 可選的 callback，接收產品名稱回傳已存在圖片 key 集合
+        """
         soup = BeautifulSoup(html, "html.parser")
 
         # ▸ 僅抓取 <div class="tab-content"> 內的 <div class="accordion accordion-flush"> 區塊
@@ -334,7 +384,10 @@ class Scraper:
             )
             try:
                 product_html = self.fetch_page(product.url)
-                product.cards = self.parse_product_page(product_html)
+                existing_images = (
+                    get_existing_images(product.name) if get_existing_images else None
+                )
+                product.cards = self.parse_product_page(product_html, existing_images)
             except (requests.RequestException, RuntimeError) as exc:
                 logger.warning("產品頁面下載失敗 %s: %s", product.url, exc)
                 product.cards = []

@@ -94,9 +94,9 @@ class TestImageOverwrite:
         c1 = _card(image=b"old_image")
         db.insert_products([_product(cards=[c1])])
 
-        # 確認圖片存在
+        # 確認圖片存在 (檔名格式: {number}_{name}.jpg)
         prod_dir = db.picture_dir / "TestProduct"
-        img_path = prod_dir / "TestCard.jpg"
+        img_path = prod_dir / "OP01-001_TestCard.jpg"
         assert img_path.exists()
         assert img_path.read_bytes() == b"old_image"
 
@@ -111,7 +111,7 @@ class TestImageOverwrite:
         db.insert_products([_product(cards=[c1])])
 
         prod_dir = db.picture_dir / "TestProduct"
-        img_path = prod_dir / "TestCard.jpg"
+        img_path = prod_dir / "OP01-001_TestCard.jpg"
         assert not img_path.exists()
 
 
@@ -140,3 +140,47 @@ class TestEmptyProducts:
     def test_insert_empty_products_no_error(self, tmp_db):
         db = DatabaseManager(tmp_db)
         db.insert_products([])  # 不應報錯
+
+
+# =====================================================================
+# 14. get_existing_images
+# =====================================================================
+class TestGetExistingImages:
+    def test_returns_empty_set_when_no_product_dir(self, tmp_db):
+        db = DatabaseManager(tmp_db)
+        result = db.get_existing_images("NonExistent")
+        assert result == set()
+
+    def test_returns_image_keys_from_existing_files(self, tmp_db):
+        db = DatabaseManager(tmp_db)
+        # 建立產品目錄與假圖片
+        prod_dir = db.picture_dir / "TestProduct"
+        prod_dir.mkdir(parents=True, exist_ok=True)
+        (prod_dir / "OP01-001_CardA.jpg").write_bytes(b"img1")
+        (prod_dir / "OP01-002_CardB.jpg").write_bytes(b"img2")
+
+        result = db.get_existing_images("TestProduct")
+        assert result == {"OP01-001_CardA", "OP01-002_CardB"}
+
+    def test_ignores_non_jpg_files(self, tmp_db):
+        db = DatabaseManager(tmp_db)
+        prod_dir = db.picture_dir / "TestProduct"
+        prod_dir.mkdir(parents=True, exist_ok=True)
+        (prod_dir / "OP01-001_CardA.jpg").write_bytes(b"img")
+        (prod_dir / "OP01-002_CardB.png").write_bytes(b"png")
+        (prod_dir / "readme.txt").write_text("txt")
+
+        result = db.get_existing_images("TestProduct")
+        assert result == {"OP01-001_CardA"}
+
+    def test_sanitizes_product_name(self, tmp_db):
+        db = DatabaseManager(tmp_db)
+        # 產品名稱含特殊字元
+        prod_name = "Product:Test/Name"
+        safe_name = "Product_Test_Name"
+        prod_dir = db.picture_dir / safe_name
+        prod_dir.mkdir(parents=True, exist_ok=True)
+        (prod_dir / "OP01-001_Card.jpg").write_bytes(b"img")
+
+        result = db.get_existing_images(prod_name)
+        assert result == {"OP01-001_Card"}

@@ -29,15 +29,18 @@ def create_job(url: str, db_path: str) -> Callable[[], None]:
     """Closure：返回實際執行爬蟲的函式。"""
 
     def job():
+        # 先建立 db 以便取得已存在圖片
+        db = DatabaseManager(db_path)
+
         scr = Scraper(url)
         html = scr.fetch()
-        data = scr.parse(html)
+        # 傳入 get_existing_images callback，讓 scraper 跳過已存在的圖片
+        data = scr.parse(html, get_existing_images=db.get_existing_images)
 
         # 防禦性過濾：排除沒有卡片的產品
         data = [p for p in data if p.cards]
 
         if data:
-            db = DatabaseManager(db_path)
             db.insert_products(data)
             logger.info("[job] %d 筆產品已寫入資料庫。", len(data))
         else:
